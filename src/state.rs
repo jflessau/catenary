@@ -1,7 +1,8 @@
 use cfg_if::cfg_if;
 use chrono::{DateTime, Utc};
+use names::Generator;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 use uuid::Uuid;
 
 cfg_if! {
@@ -10,14 +11,12 @@ cfg_if! {
         use axum::extract::FromRef;
         use tokio::sync::mpsc::{Sender};
         use std::sync::{Arc, Mutex};
-        use tokio::sync::broadcast::Sender as BroadcastSender;
 
         #[derive(FromRef, Debug, Clone)]
         pub struct AppState{
             pub leptos_options: LeptosOptions,
-            pub chat_msg_tx: Sender<ChatMessage>,
+            pub chat_msg_tx: Sender<ChatMessageIn>,
             pub plane: Arc<Mutex<Plane>>,
-            pub chat_msg_broadcast_tx: BroadcastSender<ChatMessage>,
         }
     }
 }
@@ -25,16 +24,33 @@ cfg_if! {
 #[derive(Debug, Clone)]
 pub struct Plane {
     messages: VecDeque<ChatMessage>,
+    author_usernames_by_id: HashMap<Uuid, String>,
 }
 
 impl Plane {
     pub fn new() -> Self {
         Plane {
             messages: VecDeque::with_capacity(100_000),
+            author_usernames_by_id: HashMap::new(),
         }
     }
 
-    pub fn add_message(&mut self, msg: ChatMessage) {
+    pub fn add_message(&mut self, msg: ChatMessageIn) {
+        let username = match self.author_usernames_by_id.get(&msg.author) {
+            Some(username) => username.clone(),
+            None => {
+                let username = Generator::default()
+                    .next()
+                    .unwrap_or_else(|| "anonymous".to_string());
+
+                self.author_usernames_by_id
+                    .insert(msg.author, username.clone());
+
+                username
+            }
+        };
+
+        let msg = ChatMessage::from((msg, username));
         self.messages.push_front(msg);
         if self.messages.len() >= self.messages.capacity() {
             self.messages.pop_back();
@@ -42,35 +58,137 @@ impl Plane {
     }
 
     // TODO: get messages based on trace
-    pub fn get_messages(&self) -> Vec<ChatMessage> {
+    pub fn get_messages(&self, user_id: Option<Uuid>) -> Vec<ChatMessageOut> {
         // get latest 100 messages
-        self.messages.iter().take(100).cloned().collect()
+        self.messages
+            .iter()
+            .take(100)
+            .cloned()
+            .into_iter()
+            .map(|msg| ChatMessageOut::from((msg, user_id)))
+            .collect()
+    }
 
+    pub fn vote_message(&mut self, id: Uuid, user_id: Uuid, up: bool) {
+        let Some(msg) = self.messages.iter_mut().find(|msg| msg.id == id) else {
+            log::warn!("couldn't find message with id: {}", id);
+            return;
+        };
+
+        if up {
+            if msg.upvoters.contains(&user_id) {
+                msg.upvoters.remove(&user_id);
+            } else {
+                msg.upvoters.insert(user_id);
+                msg.downvoters.remove(&user_id);
+            }
+        } else {
+            if msg.downvoters.contains(&user_id) {
+                msg.downvoters.remove(&user_id);
+            } else {
+                msg.downvoters.insert(user_id);
+                msg.upvoters.remove(&user_id);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ChatMessageIn {
+    pub id: Uuid,
+    pub author: Uuid,
+    pub username: Option<String>,
+    pub text: String,
+    pub trace: Trace,
+    pub timestamp: DateTime<Utc>,
+}
+
+impl ChatMessageIn {
+    pub fn new(author: Uuid, mut text: String, trace: Trace) -> Self {
+        if text.len() > 144 {
+            log::warn!("message too long: {}", text.len());
+            text.truncate(144);
+        }
+
+        let text = text.trim().to_string();
+
+        Self {
+            id: Uuid::new_v4(),
+            author,
+            username: None,
+            text,
+            trace,
+            timestamp: Utc::now(),
+        }
     }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub id: Uuid,
-    pub author: String,
+    pub author: Uuid,
+    pub username: String,
     pub text: String,
     pub trace: Trace,
+    pub upvoters: HashSet<Uuid>,
+    pub downvoters: HashSet<Uuid>,
     pub timestamp: DateTime<Utc>,
 }
 
-impl ChatMessage {
-    pub fn new(author: String, mut text: String, trace: Trace) -> Self {
-        if text.len() > 144 {
-            log::warn!("message too long: {}", text.len());
-            text.truncate(144);
-        }
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ChatMessageOut {
+    pub id: Uuid,
+    pub username: String,
+    pub text: String,
+    pub upvoters: usize,
+    pub downvoters: usize,
+    pub vote: Option<Vote>,
+    pub timestamp: DateTime<Utc>,
+}
+
+impl From<(ChatMessage, Option<Uuid>)> for ChatMessageOut {
+    fn from((msg, user_id): (ChatMessage, Option<Uuid>)) -> Self {
+        let vote = user_id
+            .map(|user_id| {
+                if msg.upvoters.contains(&user_id) {
+                    Some(Vote::Up)
+                } else if msg.downvoters.contains(&user_id) {
+                    Some(Vote::Down)
+                } else {
+                    None
+                }
+            })
+            .flatten();
 
         Self {
-            id: Uuid::new_v4(),
-            author,
-            text,
-            trace,
-            timestamp: Utc::now(),
+            id: msg.id,
+            username: msg.username,
+            text: msg.text,
+            upvoters: msg.upvoters.len(),
+            downvoters: msg.downvoters.len(),
+            vote,
+            timestamp: msg.timestamp,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Vote {
+    Up,
+    Down,
+}
+
+impl From<(ChatMessageIn, String)> for ChatMessage {
+    fn from((msg, username): (ChatMessageIn, String)) -> Self {
+        Self {
+            id: msg.id,
+            author: msg.author,
+            username,
+            text: msg.text,
+            trace: msg.trace,
+            upvoters: HashSet::new(),
+            downvoters: HashSet::new(),
+            timestamp: msg.timestamp,
         }
     }
 }

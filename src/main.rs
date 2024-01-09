@@ -1,7 +1,7 @@
 #[cfg(not(feature = "ssr"))]
 pub fn main() {
-    use leptos::{*};
-    use catenary::app::{App};
+    use catenary::app::App;
+    use leptos::*;
 
     _ = console_log::init_with_level(log::Level::Info);
     console_error_panic_hook::set_once();
@@ -21,17 +21,18 @@ async fn main() {
         routing::get,
         Router,
     };
-    use catenary::app::{App};
+    use catenary::app::App;
     use catenary::fileserv::file_and_error_handler;
     use catenary::state::{AppState, Plane};
-    use catenary::state::ChatMessage;
+    use catenary::state::{ChatMessage, ChatMessageIn};
     use leptos::{get_configuration, provide_context, view};
     use leptos_axum::LeptosRoutes;
-    use leptos_axum::{generate_route_list, handle_server_fns_with_context};
+    use leptos_axum::{generate_route_list, handle_server_fns_with_context, ResponseOptions};
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc::{channel, Receiver, Sender};
-    use tokio::sync::broadcast::{channel as broadcast_channel, Sender as BroadcastSender};
+    use uuid::Uuid;
 
+    #[axum::debug_handler]
     async fn server_fn_handler(
         State(app_state): State<AppState>,
         path: Path<String>,
@@ -39,6 +40,23 @@ async fn main() {
         raw_query: RawQuery,
         request: Request<AxumBody>,
     ) -> impl IntoResponse {
+        // TODO: this is a terrible hack and there must be a better way
+
+        let user_re = regex::Regex::new(
+            r#"(user=)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"#,
+        )
+        .expect("couldn't compile user regex");
+        let cookie = request.headers().get("cookie");
+        let user_id_str = cookie
+            .and_then(|cookie| {
+                user_re
+                    .captures(cookie.to_str().unwrap())
+                    .and_then(|captures| captures.get(2))
+            })
+            .map(|uuid| uuid.as_str().to_string());
+        let user_uuid =
+            Uuid::parse_str(&user_id_str.unwrap_or_default()).unwrap_or_else(|_| Uuid::new_v4());
+
         handle_server_fns_with_context(
             path,
             headers,
@@ -46,6 +64,7 @@ async fn main() {
             move || {
                 provide_context(app_state.chat_msg_tx.clone());
                 provide_context(app_state.plane.clone());
+                provide_context(user_uuid);
             },
             request,
         )
@@ -81,14 +100,12 @@ async fn main() {
 
     let messages = Arc::new(Mutex::new(Vec::<ChatMessage>::new()));
     let messages_clone = messages.clone();
-    let (tx, mut rx): (Sender<ChatMessage>, Receiver<ChatMessage>) = channel(1000);
-    let (broadcast_tx, _): (BroadcastSender<ChatMessage>, _) = broadcast_channel(1000);
+    let (tx, mut rx): (Sender<ChatMessageIn>, Receiver<ChatMessageIn>) = channel(1000);
     let plane = Arc::new(Mutex::new(Plane::new()));
     let state = AppState {
         leptos_options: leptos_options,
         chat_msg_tx: tx,
         plane: plane.clone(),
-        chat_msg_broadcast_tx: broadcast_tx.clone(),
     };
 
     // compose axum router
@@ -109,7 +126,7 @@ async fn main() {
         log::info!("starting message listener");
         loop {
             let msg = rx.recv().await.unwrap();
-            println!("got message in listener loop: {:?}", msg);
+            log::info!("got message in listener loop");
             let Ok(mut plane) = plane.lock() else {
                 log::warn!("couldn't lock plane mutex in listener loop");
                 continue;

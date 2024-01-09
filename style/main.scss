@@ -112,25 +112,60 @@ html {
         opacity: 0.5;
         text-align: left;
       }
-      .bubble {
-        width: calc(100% - 3rem);
-        border-radius: $border-radius;
-        padding: 0.5rem 0.5rem;
-        text-align: left;
-        backdrop-filter: blur(11px);
-        background: $mg;
-        box-shadow: 0 2px 0 0 $shadow;
-        border: 1px solid $border;
-        .text {
-          word-wrap: break-word;
-          font-size: 0.9rem;
+      .content {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        .bubble {
+          width: calc(100% - 2rem);
+          border-radius: $border-radius;
+          padding: 0.5rem 0.5rem;
+          text-align: left;
+          backdrop-filter: blur(11px);
+          background: $mg;
+          box-shadow: 0 2px 0 0 $shadow;
+          border: 1px solid $border;
+          .text {
+            word-wrap: break-word;
+            font-size: 0.9rem;
+            white-space: break-spaces;
+          }
+          .time {
+            width: 100%;
+            margin-top: 0.25rem;
+            font-size: 0.7rem;
+            opacity: 0.5;
+            text-align: right;
+          }
         }
-        .time {
-          width: 100%;
-          margin-top: 0.25rem;
-          font-size: 0.7rem;
-          opacity: 0.5;
-          text-align: right;
+        .votes {
+          width: 2rem;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          gap: 1rem;
+          img {
+            opacity: 0.6;
+            cursor: pointer;
+            padding: 0.3rem;
+            width: 1.2rem;
+            height: 1.2rem;
+            border-radius: $border-radius;
+            background-color: $mg;
+            border: 1px solid $border;
+            &.on {
+              background-color: $accent;
+              opacity: 1;
+            }
+            &:nth-child(2) {
+              transform: rotate(180deg);
+            }
+            &:active {
+              opacity: 0.8;
+            }
+          }
         }
       }
     }

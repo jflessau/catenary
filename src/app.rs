@@ -1,13 +1,14 @@
+use crate::api::*;
 use crate::error_template::{AppError, ErrorTemplate};
-use crate::state::ChatMessage;
-use std::time::Duration;
-use leptos::{*, leptos_dom::helpers::IntervalHandle};
+use crate::state::{ChatMessageOut, Vote};
+use leptos::{leptos_dom::helpers::IntervalHandle, *};
 use leptos_meta::*;
 use leptos_router::*;
-use crate::api::*;
+use std::time::Duration;
+use uuid::Uuid;
 
 #[component]
-pub fn App() -> impl IntoView { 
+pub fn App() -> impl IntoView {
     // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
 
@@ -40,7 +41,6 @@ pub fn App() -> impl IntoView {
 
 #[component]
 fn HomePage() -> impl IntoView {
-
     let (messages, set_messages) = create_signal(vec![]);
 
     use_interval(500, move || {
@@ -54,9 +54,7 @@ fn HomePage() -> impl IntoView {
     view! {
         <Titlebar/>
         <MainContainer>
-            <div class="messages">
-                <Messages messages=messages/>
-            </div>
+            <Messages messages/>
             <MessageForm/>
         </MainContainer>
     }
@@ -93,17 +91,9 @@ fn MessageForm() -> impl IntoView {
                 on:input=move |ev| {
                     set_msg(event_target_value(&ev));
                 }
-                on:keydown=move |ev| {
-                    if ev.key() == "Enter" {
-                        spawn_local(async move {
-                            send_message(msg.get_untracked()).await.expect("couldn't add todo");
-                            set_msg("".to_string());
-                        });
-                    }
-                }
                 prop:value={msg}
             />
-            <button class="clickable" 
+            <button class="clickable"
                 on:click=move |_| {
                     spawn_local(async move {
                         send_message(msg.get_untracked()).await.expect("couldn't send message");
@@ -118,39 +108,81 @@ fn MessageForm() -> impl IntoView {
 }
 
 #[component]
-fn Message(
-    text: String, 
-    author: String, 
-    time: String
-) -> impl IntoView {
+fn Messages(messages: ReadSignal<Vec<ChatMessageOut>>) -> impl IntoView {
     view! {
-        <div class="message message-in">
-            <p class="author">{author}</p>
-            <div class="bubble">
-                <p class="text">{text}</p>
-                <p class="time">{time}</p>
-            </div>
+        <div class="messages">
+            <For
+                each=messages
+                key=|message| format!("{}-{:?}-{}-{}", message.id, message.vote, message.upvoters, message.downvoters)
+                children=move |msg| {
+                    log::info!("updating message");
+                    view! {
+                        <Message msg />
+                    }
+                }
+            />
         </div>
     }
 }
 
 #[component]
-fn Messages(messages: ReadSignal<Vec<ChatMessage>>) -> impl IntoView {
+fn Message(msg: ChatMessageOut) -> impl IntoView {
+    let timestamp = msg.timestamp.format("%H:%M").to_string();
+
+    let opacity = 10_usize.saturating_sub(msg.downvoters);
+    log::info!("opacity: {}", opacity);
+    let bubble_style = if opacity >= 10 {
+        "opacity: 1.0;".to_owned()
+    } else if opacity <= 2 {
+        "opacity: 0.2;".to_owned()
+    } else {
+        format!("opacity: 0.{};", opacity)
+    };
+
     view! {
-        <For
-            each=messages
-            key=|message| message.id
-            children=move |msg| {
-                let time = msg.timestamp.format("%H:%M").to_string();
-                view! {
-                    <Message 
-                        author=msg.author 
-                        text=msg.text
-                        time=time
+        <div class="message message-in">
+            <p class="author">{msg.username}</p>
+            <div class="content">
+                <div class="bubble" style={bubble_style}>
+                    <p class="text">{msg.text}</p>
+                    <p class="time">{timestamp}</p>
+                </div>
+                <div class="votes">
+                    <img
+                        src="/arrow.svg"
+                        alt="upvote"
+                        class={
+                            if msg.vote == Some(Vote::Up) {
+                                "on".to_string()
+                            } else {
+                                "".to_string()
+                            }
+                        }
+                        on:click=move |_| {
+                            spawn_local(async move {
+                                vote_message(msg.id, true).await.expect("couldn't send message");
+                            });
+                        }
                     />
-                }
-            }
-        />
+                    <img
+                        src="/arrow.svg"
+                        alt="downvote"
+                        class={move || {
+                            if msg.vote == Some(Vote::Down) {
+                                "on".to_string()
+                            } else {
+                                "".to_string()
+                            }
+                        }}
+                        on:click=move |_| {
+                            spawn_local(async move {
+                                vote_message(msg.id, false).await.expect("couldn't send message");
+                            });
+                        }
+                    />
+                </div>
+            </div>
+        </div>
     }
 }
 

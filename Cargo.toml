@@ -11,7 +11,7 @@ codegen-units = 1
 lto = true
 
 [dependencies]
-axum = { version = "0.6.1", optional = true, features = ["ws", "json"] }
+axum = { version = "0.6.1", optional = true, features = ["ws", "json", "headers"] }
 console_error_panic_hook = "0.1"
 console_log = "1"
 cfg-if = "1"
@@ -38,9 +38,11 @@ uuid = { version = "1.6.1", features = ["serde", "v4"] }
 chrono = { version = "0.4.31", features = ["serde"] }
 serde_json = "1.0.111"
 web-sys = "0.3.66"
+axum-extra = { version = "0.9.1", features = ["cookie", "typed-header"] }
+time = "0.3.31"
+regex = { version = "1.10.2", optional = true }
 
 [features]
-default = ["csr"]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = [
@@ -49,6 +51,7 @@ ssr = [
     "dep:tower",
     "dep:tower-http",
     "dep:leptos_axum",
+    "dep:regex",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
@@ -57,6 +60,7 @@ ssr = [
     "leptos_server_signal/ssr",
     "leptos_server_signal/axum",
 ]
+default = ["csr"]
 
 # set default features for wasm builds
 # [profile.dev.package.leptos]
@@ -90,7 +94,7 @@ style-file = "style/main.scss"
 assets-dir = "public"
 
 # The IP and port (ex: 127.0.0.1:3000) where the server serves the content. Use it in your server setup.
-site-addr = "127.0.0.1:3000"
+site-addr = "0.0.0.0:3000"
 
 # The port to use for automatic reload monitoring
 reload-port = 3001
