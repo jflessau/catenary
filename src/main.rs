@@ -27,7 +27,7 @@ async fn main() {
     use catenary::state::{ChatMessage, ChatMessageIn};
     use leptos::{get_configuration, provide_context, view};
     use leptos_axum::LeptosRoutes;
-    use leptos_axum::{generate_route_list, handle_server_fns_with_context, ResponseOptions};
+    use leptos_axum::{generate_route_list, handle_server_fns_with_context};
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc::{channel, Receiver, Sender};
     use uuid::Uuid;
@@ -62,7 +62,7 @@ async fn main() {
             headers,
             raw_query,
             move || {
-                provide_context(app_state.chat_msg_tx.clone());
+                provide_context(app_state.chat_msg_in_tx.clone());
                 provide_context(app_state.plane.clone());
                 provide_context(user_uuid);
             },
@@ -78,7 +78,7 @@ async fn main() {
         let handler = leptos_axum::render_app_to_stream_with_context(
             app_state.leptos_options.clone(),
             move || {
-                provide_context(app_state.chat_msg_tx.clone());
+                provide_context(app_state.chat_msg_in_tx.clone());
             },
             || view! { <App/> },
         );
@@ -100,11 +100,13 @@ async fn main() {
 
     let messages = Arc::new(Mutex::new(Vec::<ChatMessage>::new()));
     let messages_clone = messages.clone();
-    let (tx, mut rx): (Sender<ChatMessageIn>, Receiver<ChatMessageIn>) = channel(1000);
+    let (chat_msg_in_tx, mut chat_msg_in_rx): (Sender<ChatMessageIn>, Receiver<ChatMessageIn>) =
+        channel(1000);
+
     let plane = Arc::new(Mutex::new(Plane::new()));
     let state = AppState {
         leptos_options: leptos_options,
-        chat_msg_tx: tx,
+        chat_msg_in_tx,
         plane: plane.clone(),
     };
 
@@ -125,10 +127,12 @@ async fn main() {
     tokio::spawn(async move {
         log::info!("starting message listener");
         loop {
-            let msg = rx.recv().await.unwrap();
-            log::info!("got message in listener loop");
-            let Ok(mut plane) = plane.lock() else {
-                log::warn!("couldn't lock plane mutex in listener loop");
+            let Some(msg) = chat_msg_in_rx.recv().await else {
+                log::warn!("couldn't receive message via chat_msg_in_rx");
+                continue;
+            };
+            let Ok(mut plane) = plane.try_lock() else {
+                log::warn!("couldn't lock plane mutex in message listener");
                 continue;
             };
             plane.add_message(msg);

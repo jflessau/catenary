@@ -15,7 +15,7 @@ cfg_if! {
         #[derive(FromRef, Debug, Clone)]
         pub struct AppState{
             pub leptos_options: LeptosOptions,
-            pub chat_msg_tx: Sender<ChatMessageIn>,
+            pub chat_msg_in_tx: Sender<ChatMessageIn>,
             pub plane: Arc<Mutex<Plane>>,
         }
     }
@@ -51,7 +51,7 @@ impl Plane {
         };
 
         let msg = ChatMessage::from((msg, username));
-        self.messages.push_front(msg);
+        self.messages.push_front(msg.clone());
         if self.messages.len() >= self.messages.capacity() {
             self.messages.pop_back();
         }
@@ -135,6 +135,21 @@ pub struct ChatMessage {
     pub timestamp: DateTime<Utc>,
 }
 
+impl From<(ChatMessageIn, String)> for ChatMessage {
+    fn from((msg, username): (ChatMessageIn, String)) -> Self {
+        Self {
+            id: msg.id,
+            author: msg.author,
+            username,
+            text: msg.text,
+            trace: msg.trace,
+            upvoters: HashSet::new(),
+            downvoters: HashSet::new(),
+            timestamp: msg.timestamp,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ChatMessageOut {
     pub id: Uuid,
@@ -176,21 +191,6 @@ impl From<(ChatMessage, Option<Uuid>)> for ChatMessageOut {
 pub enum Vote {
     Up,
     Down,
-}
-
-impl From<(ChatMessageIn, String)> for ChatMessage {
-    fn from((msg, username): (ChatMessageIn, String)) -> Self {
-        Self {
-            id: msg.id,
-            author: msg.author,
-            username,
-            text: msg.text,
-            trace: msg.trace,
-            upvoters: HashSet::new(),
-            downvoters: HashSet::new(),
-            timestamp: msg.timestamp,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

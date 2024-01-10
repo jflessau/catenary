@@ -5,7 +5,6 @@ use leptos::{leptos_dom::helpers::IntervalHandle, *};
 use leptos_meta::*;
 use leptos_router::*;
 use std::time::Duration;
-use uuid::Uuid;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -13,15 +12,10 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
 
     view! {
-        // injects a stylesheet into the document <head>
-        // id=leptos means cargo-leptos will hot-reload this stylesheet
+        <Title text="Catenary - chat far and wide!"/>
         <Stylesheet id="leptos" href="/pkg/catenary.css"/>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 
-        // sets the document title
-        <Title text="Catenary - chat far and wide!"/>
-
-        // content for this welcome page
         <Router fallback=|| {
             let mut outside_errors = Errors::default();
             outside_errors.insert_with_default_key(AppError::NotFound);
@@ -42,20 +36,34 @@ pub fn App() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     let (messages, set_messages) = create_signal(vec![]);
+    let (load_messages, set_load_messages) = create_signal(false);
 
-    use_interval(500, move || {
-        log::info!("interval");
+    let loader = create_resource(load_messages, move |load_messages| async move {
+        if load_messages {
+            set_load_messages(false);
+            set_messages(list_messages().await.expect("couldn't list message"));
+        }
+        return "".to_owned();
+    });
+
+    use_interval(1000, move || {
         spawn_local(async move {
-            let messages = list_messages().await.expect("couldn't get messages");
-            set_messages(messages);
+            set_load_messages(true);
         });
     });
 
     view! {
         <Titlebar/>
         <MainContainer>
-            <Messages messages/>
-            <MessageForm/>
+            <Transition fallback=move || view! {
+                <div class="loading-container">
+                    <span class="loader"></span>
+                </div>
+            }>
+                {move || loader.get()}
+                <Messages messages set_load_messages/>
+            </Transition>
+            <BottomBar set_load_messages/>
         </MainContainer>
     }
 }
@@ -79,8 +87,15 @@ pub fn MainContainer(children: Children) -> impl IntoView {
 }
 
 #[component]
-fn MessageForm() -> impl IntoView {
+fn BottomBar(set_load_messages: WriteSignal<bool>) -> impl IntoView {
     let (msg, set_msg) = create_signal("".to_string());
+    let (sending, set_sending) = create_signal(false);
+
+    let send_button_props = move || match (sending.get(), msg.get().is_empty()) {
+        (true, _) => ("Sending...", "clickable disabled"),
+        (_, true) => ("Send", "clickable disabled"),
+        _ => ("Send", "clickable"),
+    };
 
     view! {
         <div class="bottom-bar">
@@ -91,33 +106,44 @@ fn MessageForm() -> impl IntoView {
                 on:input=move |ev| {
                     set_msg(event_target_value(&ev));
                 }
-                prop:value={msg}
+                prop:value={msg.clone()}
             />
-            <button class="clickable"
+            <button class={move || send_button_props().1}
                 on:click=move |_| {
+                    if sending.get() {
+                        return;
+                    }
                     spawn_local(async move {
-                        send_message(msg.get_untracked()).await.expect("couldn't send message");
+                        set_sending(true);
+                        let msg_text = msg.get_untracked();
                         set_msg("".to_string());
+                        send_message(msg_text)
+                            .await
+                            .expect("couldn't send message");
+                        set_load_messages(true);
+                        set_sending(false);
                     });
                 }
             >
-                "Send"
+                {move || send_button_props().0}
             </button>
         </div>
     }
 }
 
 #[component]
-fn Messages(messages: ReadSignal<Vec<ChatMessageOut>>) -> impl IntoView {
+fn Messages(
+    messages: ReadSignal<Vec<ChatMessageOut>>,
+    set_load_messages: WriteSignal<bool>,
+) -> impl IntoView {
     view! {
         <div class="messages">
             <For
                 each=messages
                 key=|message| format!("{}-{:?}-{}-{}", message.id, message.vote, message.upvoters, message.downvoters)
                 children=move |msg| {
-                    log::info!("updating message");
                     view! {
-                        <Message msg />
+                        <Message msg set_load_messages/>
                     }
                 }
             />
@@ -126,11 +152,10 @@ fn Messages(messages: ReadSignal<Vec<ChatMessageOut>>) -> impl IntoView {
 }
 
 #[component]
-fn Message(msg: ChatMessageOut) -> impl IntoView {
+fn Message(msg: ChatMessageOut, set_load_messages: WriteSignal<bool>) -> impl IntoView {
     let timestamp = msg.timestamp.format("%H:%M").to_string();
 
     let opacity = 10_usize.saturating_sub(msg.downvoters);
-    log::info!("opacity: {}", opacity);
     let bubble_style = if opacity >= 10 {
         "opacity: 1.0;".to_owned()
     } else if opacity <= 2 {
@@ -161,6 +186,7 @@ fn Message(msg: ChatMessageOut) -> impl IntoView {
                         on:click=move |_| {
                             spawn_local(async move {
                                 vote_message(msg.id, true).await.expect("couldn't send message");
+                                set_load_messages(true);
                             });
                         }
                     />
@@ -177,6 +203,7 @@ fn Message(msg: ChatMessageOut) -> impl IntoView {
                         on:click=move |_| {
                             spawn_local(async move {
                                 vote_message(msg.id, false).await.expect("couldn't send message");
+                                set_load_messages(true);
                             });
                         }
                     />
