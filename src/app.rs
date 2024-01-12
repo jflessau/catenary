@@ -4,11 +4,14 @@ use crate::state::{ChatMessageOut, Vote};
 use leptos::{leptos_dom::helpers::IntervalHandle, *};
 use leptos_meta::*;
 use leptos_router::*;
+use leptos_use::{
+    use_geolocation, use_geolocation_with_options, use_window, UseGeolocationOptions,
+    UseGeolocationReturn,
+};
 use std::time::Duration;
 
 #[component]
 pub fn App() -> impl IntoView {
-    // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
 
     view! {
@@ -70,6 +73,37 @@ fn HomePage() -> impl IntoView {
 
 #[component]
 fn Titlebar() -> impl IntoView {
+    let (location, set_location) = create_signal(None as Option<(f64, f64)>);
+
+    create_effect(move |prev_handle: Option<IntervalHandle>| {
+        if let Some(prev_handle) = prev_handle {
+            prev_handle.clear();
+        };
+        let UseGeolocationReturn { coords, error, .. } = use_geolocation();
+
+        log::info!("run effect");
+
+        let locate = move || {
+            let window = use_window();
+            log::info!("window is some: {:?}", window.is_some()); // logs "window is some: false" to browser console
+
+            log::info!("run locate");
+            if let Some(coords) = coords.get() {
+                log::info!(
+                    "lat: {:?}, long: {:?}",
+                    coords.latitude(),
+                    coords.longitude()
+                );
+                set_location(Some((coords.latitude(), coords.longitude())));
+            } else {
+                log::info!("no coords, error: {:?}", error.get()); // logs "no coords, error: None" to browser console
+            };
+        };
+
+        set_interval_with_handle(locate, Duration::from_millis(500))
+            .expect("could not create interval")
+    });
+
     view! {
         <div class="titlebar">
             <h1><span>"🚃"</span>"Catenary"</h1>
@@ -119,7 +153,7 @@ fn BottomBar(set_load_messages: WriteSignal<bool>) -> impl IntoView {
                         set_msg("".to_string());
                         send_message(msg_text)
                             .await
-                            .expect("couldn't send message");
+                            .expect("couldn't send message"); // TODO: try this in create_server_action
                         set_load_messages(true);
                         set_sending(false);
                     });
@@ -213,12 +247,10 @@ fn Message(msg: ChatMessageOut, set_load_messages: WriteSignal<bool>) -> impl In
     }
 }
 
-pub fn use_interval<T, F>(interval_millis: T, f: F)
+pub fn use_interval<F>(interval_millis: u64, f: F)
 where
     F: Fn() + Clone + 'static,
-    T: Into<MaybeSignal<u64>> + 'static,
 {
-    let interval_millis = interval_millis.into();
     create_effect(move |prev_handle: Option<IntervalHandle>| {
         // effects get their previous return value as an argument
         // each time the effect runs, it will return the interval handle
@@ -232,7 +264,7 @@ where
             f.clone(),
             // this is the only reactive access, so this effect will only
             // re-run when the interval changes
-            Duration::from_millis(interval_millis.get()),
+            Duration::from_millis(interval_millis),
         )
         .expect("could not create interval")
     });

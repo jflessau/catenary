@@ -108,6 +108,7 @@ html {
   flex-direction: column;
   .messages {
     height: calc(100% - 3rem);
+    padding-bottom: 1rem;
     overflow-y: scroll;
     display: flex;
     flex-direction: column-reverse;
@@ -116,7 +117,7 @@ html {
     overflow-anchor: auto !important;
     background: $bg;
     .message {
-      padding: 0.25rem 1rem 1rem 1rem;
+      padding: 1rem 1rem 0rem 1rem;
       width: 100%;
       .author {
         padding-left: 0.5rem;
@@ -153,7 +154,7 @@ html {
           }
         }
         .votes {
-          width: 2rem;
+          width: 1.5rem;
           display: flex;
           flex-direction: column;
           justify-content: center;
