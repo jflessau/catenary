@@ -41,6 +41,8 @@ web-sys = "0.3.66"
 axum-extra = { version = "0.9.1", features = ["cookie", "typed-header"] }
 time = "0.3.31"
 regex = { version = "1.10.2", optional = true }
+geo = { version = "0.27.0", features = ["use-serde"] }
+anyhow = "1.0.79"
 
 [features]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]

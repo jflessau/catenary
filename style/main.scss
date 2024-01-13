@@ -256,3 +256,13 @@ html {
     border-radius: 10%;
   }
 }
+
+.no-trace {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1rem;
+  line-height: 2rem;
+  font-weight: bold;
+}

@@ -1,9 +1,11 @@
 use cfg_if::cfg_if;
 use chrono::{DateTime, Utc};
+use geo::{geometry::Point, GeodesicDistance};
 use names::Generator;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use uuid::Uuid;
+use web_sys::PositionError;
 
 cfg_if! {
     if #[cfg(feature = "ssr")] {
@@ -195,70 +197,131 @@ pub enum Vote {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Trace {
-    pub location: GeoLocation,
-    pub velocity: Velocity,
+    pub location: (f64, f64), // lat, lon
+    pub speed: f64,           // meters per second
+    pub slope: f64,           // degrees
 }
 
 impl Trace {
-    pub fn new(location: GeoLocation, velocity: Velocity) -> Self {
-        Self { location, velocity }
+    pub fn new(location: (f64, f64), speed: f64, slope: f64) -> Self {
+        Self {
+            location,
+            speed,
+            slope,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum NoTrace {
+    NoPermission,
+    PositionUnavailable,
+    Timeout,
+    WaitingForMoreLocations {
+        received_locations: usize,
+        required_locations: usize,
+    },
+    WaitingForTimeToPass,
+    TooSlow {
+        current_speed: f64,
+        required_speed: f64,
+    },
+}
+
+impl From<PositionError> for NoTrace {
+    fn from(err: PositionError) -> Self {
+        match err.code() {
+            1 => NoTrace::NoPermission,
+            2 => NoTrace::PositionUnavailable,
+            _ => NoTrace::Timeout,
+        }
     }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct GeoLocation {
-    pub x: f32,
-    pub y: f32,
+pub struct LocationHistory {
+    locations: Vec<(Point<f64>, DateTime<Utc>)>,
+    size: usize,
+    max_location_age: usize,      // seconds
+    min_location_time_delta: f64, // seconds
+    min_speed: f64,               // seconds
 }
 
-impl GeoLocation {
-    pub fn new(x: f32, y: f32) -> Self {
-        if x.is_nan() || y.is_nan() {
-            log::warn!("location is nan: {}, {}", x, y);
-            return Self { x: 0.0, y: 0.0 };
+impl LocationHistory {
+    pub fn new() -> Self {
+        Self {
+            locations: vec![],
+            size: 3, // TODO: set this to, say, 8?
+            max_location_age: 60,
+            min_location_time_delta: 1.0, // TODO: set this to, say, 3.0?
+            min_speed: 3.0,
         }
-        if x.is_infinite() || y.is_infinite() {
-            log::warn!("location is infinite: {}, {}", x, y);
-            return Self { x: 0.0, y: 0.0 };
-        }
-        if x < -180.0 || x > 180.0 || y < -90.0 || y > 90.0 {
-            log::warn!("location is out of bounds: {}, {}", x, y);
-            return Self { x: 0.0, y: 0.0 };
-        }
-
-        Self { x, y }
-    }
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Velocity {
-    pub x: f32,
-    pub y: f32,
-}
-
-impl Velocity {
-    pub fn new(x: f32, y: f32) -> Self {
-        if x.is_nan() || y.is_nan() {
-            log::warn!("velocity is nan: {}, {}", x, y);
-            return Self { x: 0.0, y: 0.0 };
-        }
-        if x.is_infinite() || y.is_infinite() {
-            log::warn!("velocity is infinite: {}, {}", x, y);
-            return Self { x: 0.0, y: 0.0 };
-        }
-        if x > 2000.0 || x < -2000.0 || y > 2000.0 || y < -2000.0 {
-            log::warn!("velocity too high: {}, {}", x, y);
-            return Self { x: 0.0, y: 0.0 };
-        }
-
-        Self { x, y }
     }
 
-    pub fn angle(&self) -> f32 {
-        self.y.atan2(self.x).to_degrees()
+    pub fn add_location(&mut self, location: Point<f64>) {
+        self.locations.insert(0, (location, Utc::now()));
+        if self.locations.len() > self.size {
+            self.locations.pop();
+        }
     }
 
-    pub fn magnitude(&self) -> f32 {
-        (self.x.powi(2) + self.y.powi(2)).sqrt()
+    pub fn trace(&mut self) -> Result<Trace, NoTrace> {
+        return Ok(Trace::new((0.0, 0.0), 0.0, 0.0));
+
+        self.locations.retain(|(_, timestamp)| {
+            let duration = Utc::now() - *timestamp;
+            duration.num_seconds() < self.max_location_age as i64
+        });
+
+        if self.size > self.locations.len() {
+            log::info!(
+                "not enough points for trace: {} / {}",
+                self.locations.len(),
+                self.size
+            );
+            return Err(NoTrace::WaitingForMoreLocations {
+                received_locations: self.locations.len(),
+                required_locations: self.size,
+            });
+        }
+
+        let earliest: Option<&(Point<f64>, DateTime<Utc>)> = self.locations.get(self.size - 1);
+        let latest: Option<&(Point<f64>, DateTime<Utc>)> = self.locations.first();
+
+        match (earliest, latest) {
+            (Some((p_a, t_a)), Some((p_b, t_b))) => {
+                let duration = (*t_b - *t_a).num_milliseconds() as f64 / 1000.0;
+                if duration < self.min_location_time_delta {
+                    Err(NoTrace::WaitingForTimeToPass)
+                } else {
+                    let distance = p_a.geodesic_distance(p_b);
+                    let speed = distance / duration;
+                    if speed <= self.min_speed {
+                        log::info!("speed too low: {} m/s", speed);
+                        return Err(NoTrace::TooSlow {
+                            current_speed: speed as f64,
+                            required_speed: self.min_speed,
+                        });
+                    }
+                    let line = geo::Line::new(*p_a, *p_b);
+                    let slope = line.slope().to_radians().to_degrees();
+                    log::info!(
+                        "duration: {} s, distance: {} m, speed: {} m/s, slope: {} deg",
+                        duration,
+                        distance,
+                        speed,
+                        slope
+                    );
+                    Ok(Trace::new((p_b.x(), p_b.y()), speed, slope))
+                }
+            }
+            _ => {
+                log::error!(
+                    "couldn't get earliest and latest points, this shouldn't happen, deque: {:?}",
+                    self.locations
+                );
+                Err(NoTrace::WaitingForTimeToPass)
+            }
+        }
     }
 }

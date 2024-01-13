@@ -1,4 +1,4 @@
-use crate::state::ChatMessageOut;
+use crate::state::{ChatMessageOut, Trace};
 use leptos::*;
 use uuid::Uuid;
 
@@ -14,7 +14,8 @@ use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 
 #[server(SendMessage, "/api")]
-pub async fn send_message(text: String) -> Result<(), ServerFnError> {
+pub async fn send_message(text: String, trace: Trace) -> Result<(), ServerFnError> {
+    println!("send_message with text: {}, trace: {:?}", text, trace);
     let tx_in = use_context::<Sender<ChatMessageIn>>().expect("couldn't get sender context");
     let response = expect_context::<ResponseOptions>();
 
@@ -35,11 +36,7 @@ pub async fn send_message(text: String) -> Result<(), ServerFnError> {
         return Ok(());
     }
 
-    let msg_in = ChatMessageIn::new(
-        user_id,
-        text,
-        Trace::new(GeoLocation::new(0.0, 0.0), Velocity::new(0.0, 0.0)),
-    );
+    let msg_in = ChatMessageIn::new(user_id, text, trace);
 
     if let Err(err) = tx_in.send(msg_in.clone()).await {
         log::error!("couldn't send chat message, error: {}", err);

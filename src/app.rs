@@ -1,6 +1,7 @@
 use crate::api::*;
 use crate::error_template::{AppError, ErrorTemplate};
-use crate::state::{ChatMessageOut, Vote};
+use crate::state::*;
+use geo::Point;
 use leptos::{leptos_dom::helpers::IntervalHandle, *};
 use leptos_meta::*;
 use leptos_router::*;
@@ -29,7 +30,7 @@ pub fn App() -> impl IntoView {
         }>
             <main>
                 <Routes>
-                    <Route path="" view=HomePage/>
+                    <Route path="" view=MainView/>
                 </Routes>
             </main>
         </Router>
@@ -37,7 +38,122 @@ pub fn App() -> impl IntoView {
 }
 
 #[component]
-fn HomePage() -> impl IntoView {
+fn MainView() -> impl IntoView {
+    let (location, set_location) = create_signal(None as Option<Point<f64>>);
+    let location_history = LocationHistory::new();
+    let (trace, set_trace) = create_signal(location_history.clone().trace());
+    let (location_history, set_location_history) = create_signal(location_history);
+
+    create_effect(move |_| {
+        let Some(location) = location.get() else {
+            return;
+        };
+        let mut location_history = location_history.get_untracked();
+        location_history.add_location(location);
+        let new_trace = location_history.trace();
+        set_location_history(location_history);
+        set_trace(new_trace);
+    });
+
+    create_effect(move |prev_handle: Option<IntervalHandle>| {
+        log::info!("run geolocation effect");
+        if let Some(prev_handle) = prev_handle {
+            log::info!("clearing previous interval in geolocation effect");
+            prev_handle.clear();
+        };
+
+        let UseGeolocationReturn { coords, error, .. } = use_geolocation();
+
+        let locate = move || {
+            if let Some(coords) = coords.get() {
+                set_location(Some(Point::new(coords.longitude(), coords.latitude())));
+            } else {
+                log::info!("no coords, error: {:?}", error.get());
+            };
+        };
+
+        set_interval_with_handle(locate, Duration::from_millis(1000))
+            .expect("could not create interval")
+    });
+
+    view! {
+        <Titlebar/>
+        <div class="main-container">
+            <NoTrace trace/>
+            <Chat trace/>
+        </div>
+    }
+}
+
+#[component]
+fn NoTrace(trace: ReadSignal<Result<Trace, NoTrace>>) -> impl IntoView {
+    if trace.get().is_ok() {
+        return view! {
+            <div></div>
+        }
+        .into_view();
+    }
+
+    let text = move || {
+        match trace() {
+        Err(NoTrace::NoPermission) => view! {
+            <p class="error">"Please allow location access and reload the page."</p>
+        }.into_view(),
+        Err(NoTrace::PositionUnavailable) | Err(NoTrace::Timeout) => view! {
+            <p class="error">"Catenary needs your location to work. Please allow location access and reload the page."</p>
+        }.into_view(),
+        Err(NoTrace::WaitingForMoreLocations {
+            received_locations,
+            required_locations,
+        }) => {
+            let percentage = if received_locations > 0 && required_locations > 0 {
+                (received_locations as f64 / required_locations as f64) * 100.0
+            } else {
+                0.0
+            };
+            view! {
+                <p class="wait">
+                    "More location data is needed to match you with other users."
+                    <br/>
+                    "Please wait."
+                </p>
+            }.into_view()
+        }
+        Err(NoTrace::WaitingForTimeToPass) => view! {
+            <p class="wait">
+                "More location data is needed to match you with other users."
+                <br/>
+                "Please wait."
+            </p>
+        }.into_view(),
+        Err(NoTrace::TooSlow {
+            current_speed,
+            required_speed,
+        }) => view! {
+            <p class="info">
+                {"Your speed is too slow to match you with other users."}
+                <br/>
+                {"This site groups users on the same bus, train, etc. into the same chat room."}
+                <br/>
+                {format!("Therefore, you need to be moving at least {required_speed} meters per second.")}
+                <br/>
+                {format!("Your current speed is {current_speed} meters per second.")}
+            </p>
+        }.into_view(),
+        Ok(_) => view! { <div></div> }.into_view(),
+    }
+    };
+
+    view! {
+        <div class="no-trace">
+            {text()}
+        </div>
+    }
+    .into_view()
+}
+
+#[component]
+fn Chat(trace: ReadSignal<Result<Trace, NoTrace>>) -> impl IntoView {
     let (messages, set_messages) = create_signal(vec![]);
     let (load_messages, set_load_messages) = create_signal(false);
 
@@ -49,61 +165,33 @@ fn HomePage() -> impl IntoView {
         return "".to_owned();
     });
 
-    use_interval(1000, move || {
-        spawn_local(async move {
-            set_load_messages(true);
-        });
+    create_effect(move |_| {
+        set_interval_with_handle(
+            move || {
+                spawn_local(async move {
+                    set_load_messages(true);
+                });
+            },
+            Duration::from_millis(500),
+        )
+        .expect("could not create interval");
     });
 
     view! {
-        <Titlebar/>
-        <MainContainer>
-            <Transition fallback=move || view! {
-                <div class="loading-container">
-                    <span class="loader"></span>
-                </div>
-            }>
-                {move || loader.get()}
-                <Messages messages set_load_messages/>
-            </Transition>
-            <BottomBar set_load_messages/>
-        </MainContainer>
+        <Transition fallback=move || view! {
+            <div class="loading-container">
+                <span class="loader"></span>
+            </div>
+        }>
+            {move || loader.get()}
+            <Messages messages set_load_messages/>
+            <BottomBar set_load_messages trace />
+        </Transition>
     }
 }
 
 #[component]
 fn Titlebar() -> impl IntoView {
-    let (location, set_location) = create_signal(None as Option<(f64, f64)>);
-
-    create_effect(move |prev_handle: Option<IntervalHandle>| {
-        if let Some(prev_handle) = prev_handle {
-            prev_handle.clear();
-        };
-        let UseGeolocationReturn { coords, error, .. } = use_geolocation();
-
-        log::info!("run effect");
-
-        let locate = move || {
-            let window = use_window();
-            log::info!("window is some: {:?}", window.is_some()); // logs "window is some: false" to browser console
-
-            log::info!("run locate");
-            if let Some(coords) = coords.get() {
-                log::info!(
-                    "lat: {:?}, long: {:?}",
-                    coords.latitude(),
-                    coords.longitude()
-                );
-                set_location(Some((coords.latitude(), coords.longitude())));
-            } else {
-                log::info!("no coords, error: {:?}", error.get()); // logs "no coords, error: None" to browser console
-            };
-        };
-
-        set_interval_with_handle(locate, Duration::from_millis(500))
-            .expect("could not create interval")
-    });
-
     view! {
         <div class="titlebar">
             <h1><span>"🚃"</span>"Catenary"</h1>
@@ -112,16 +200,10 @@ fn Titlebar() -> impl IntoView {
 }
 
 #[component]
-pub fn MainContainer(children: Children) -> impl IntoView {
-    view! {
-        <div class="main-container">
-            {children()}
-        </div>
-    }
-}
-
-#[component]
-fn BottomBar(set_load_messages: WriteSignal<bool>) -> impl IntoView {
+fn BottomBar(
+    set_load_messages: WriteSignal<bool>,
+    trace: ReadSignal<Result<Trace, NoTrace>>,
+) -> impl IntoView {
     let (msg, set_msg) = create_signal("".to_string());
     let (sending, set_sending) = create_signal(false);
 
@@ -148,12 +230,16 @@ fn BottomBar(set_load_messages: WriteSignal<bool>) -> impl IntoView {
                         return;
                     }
                     spawn_local(async move {
+                        let Ok(trace) = trace.get() else {
+                            log::error!("no trace for sending message, this shouldn't happen");
+                            return;
+                        };
                         set_sending(true);
                         let msg_text = msg.get_untracked();
                         set_msg("".to_string());
-                        send_message(msg_text)
+                        send_message(msg_text, trace)
                             .await
-                            .expect("couldn't send message"); // TODO: try this in create_server_action
+                            .expect("couldn't send message");
                         set_load_messages(true);
                         set_sending(false);
                     });
@@ -245,27 +331,4 @@ fn Message(msg: ChatMessageOut, set_load_messages: WriteSignal<bool>) -> impl In
             </div>
         </div>
     }
-}
-
-pub fn use_interval<F>(interval_millis: u64, f: F)
-where
-    F: Fn() + Clone + 'static,
-{
-    create_effect(move |prev_handle: Option<IntervalHandle>| {
-        // effects get their previous return value as an argument
-        // each time the effect runs, it will return the interval handle
-        // so if we have a previous one, we cancel it
-        if let Some(prev_handle) = prev_handle {
-            prev_handle.clear();
-        };
-
-        // here, we return the handle
-        set_interval_with_handle(
-            f.clone(),
-            // this is the only reactive access, so this effect will only
-            // re-run when the interval changes
-            Duration::from_millis(interval_millis),
-        )
-        .expect("could not create interval")
-    });
 }
