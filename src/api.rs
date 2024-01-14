@@ -15,7 +15,6 @@ use tokio::sync::mpsc::Sender;
 
 #[server(SendMessage, "/api")]
 pub async fn send_message(text: String, trace: Trace) -> Result<(), ServerFnError> {
-    println!("send_message with text: {}, trace: {:?}", text, trace);
     let tx_in = use_context::<Sender<ChatMessageIn>>().expect("couldn't get sender context");
     let response = expect_context::<ResponseOptions>();
 
@@ -28,7 +27,7 @@ pub async fn send_message(text: String, trace: Trace) -> Result<(), ServerFnErro
 
     response.insert_header(
         http::header::SET_COOKIE,
-        http::HeaderValue::from_str(&format!("user={}", user_id))
+        http::HeaderValue::from_str(&format!("user={}; Max-Age={}", user_id, 3600 * 12))
             .expect("couldn't set user cookie"),
     );
 

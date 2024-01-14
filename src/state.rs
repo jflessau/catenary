@@ -54,6 +54,10 @@ impl Plane {
 
         let msg = ChatMessage::from((msg, username));
         self.messages.push_front(msg.clone());
+
+        self.messages
+            .retain(|msg| (Utc::now() - msg.timestamp).num_minutes() < 10);
+
         if self.messages.len() >= self.messages.capacity() {
             self.messages.pop_back();
         }
@@ -266,7 +270,19 @@ impl LocationHistory {
     }
 
     pub fn trace(&mut self) -> Result<Trace, NoTrace> {
-        return Ok(Trace::new((0.0, 0.0), 0.0, 0.0));
+        // return Ok(Trace::new((0.0, 0.0), 0.0, 0.0));
+        // return Err(NoTrace::NoPermission);
+        // return Err(NoTrace::PositionUnavailable);
+        // return Err(NoTrace::Timeout);
+        // return Err(NoTrace::WaitingForMoreLocations {
+        //     received_locations: 2,
+        //     required_locations: 3,
+        // });
+        // return (Err(NoTrace::WaitingForTimeToPass));
+        return Err(NoTrace::TooSlow {
+            current_speed: 0.3,
+            required_speed: 3.0,
+        });
 
         self.locations.retain(|(_, timestamp)| {
             let duration = Utc::now() - *timestamp;
