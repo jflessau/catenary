@@ -279,10 +279,10 @@ impl LocationHistory {
         //     required_locations: 3,
         // });
         // return (Err(NoTrace::WaitingForTimeToPass));
-        return Err(NoTrace::TooSlow {
-            current_speed: 0.3,
-            required_speed: 3.0,
-        });
+        // return Err(NoTrace::TooSlow {
+        //     current_speed: 0.3,
+        //     required_speed: 3.0,
+        // });
 
         self.locations.retain(|(_, timestamp)| {
             let duration = Utc::now() - *timestamp;

@@ -42,10 +42,18 @@ pub fn View() -> impl IntoView {
             There are already apps out there matching people solely based on location, so Catenary is designed to fill a different niche; connecting people who are travelling.
             "#.to_string(),
         ),
+
+        (
+            "How does the voting system work?".to_string(),
+            r#"Upvotes increase a posts font size and downvotes decrease a posts opacity.
+
+            The effect of one vote is relatively small. It may need votes from several users before it becomes clearly visible. This is intentional.
+            "#.to_string(),
+        ),
     ];
 
     view! {
-        <Titlebar go_back_link=Some("/")/>
+        <Titlebar current_page="faq"/>
         <div class="main-container">
             <FAQ title="FAQ" q_and_a/>
         </div>
@@ -54,47 +62,49 @@ pub fn View() -> impl IntoView {
 
 #[component]
 pub fn FAQ(title: &'static str, q_and_a: Vec<(String, String)>) -> impl IntoView {
-    let mut opened = HashSet::<String>::new();
-    q_and_a.first().map(|(q, _)| opened.insert(q.clone()));
     let (q_and_a, _) = create_signal(q_and_a);
-    let (opened, set_opened) = create_signal(opened);
+    let (opened, set_opened) = create_signal(HashSet::<String>::new());
 
     view! {
-        <div class="faq">
-            <h1>{title}</h1>
-            <For
-                each=q_and_a
-                key=|item| item.0.clone()
-                children=move |item| {
-                    let qa = item.clone();
-                    let q = item.clone().0;
-                    let a = item.clone().1;
-                    view! {
-                        <div class="faq-item">
-                            <button type="button"
-                                class="q"
-                                on:click=move |_| {
-                                    log::info!("clicked {}", qa.0);
-                                    let mut opened = opened.get();
-                                    if opened.contains(&qa.0) {
-                                        opened.remove::<String>(&qa.0);
-                                    } else {
-                                        opened.insert(qa.0.clone());
-                                    }
-                                    set_opened(opened);
-                                }
-                            >
-                                {q}
-                            </button>
-                            <Show when=move || opened.get().contains(&item.0)
-                                fallback=move || view! {}
-                            >
-                                <p class="a">{a.clone()}</p>
-                            </Show>
-                        </div>
-                    }
-                }
-            />
+        <div class="row">
+            <div class="faq">
+                <h1>{title}</h1>
+                <div class="faq-items">
+                    <For
+                        each=q_and_a
+                        key=|item| item.0.clone()
+                        children=move |item| {
+                            let qa = item.clone();
+                            let q = item.clone().0;
+                            let a = item.clone().1;
+                            view! {
+                                <div class="faq-item">
+                                    <button type="button"
+                                        class="q"
+                                        on:click=move |_| {
+                                            log::info!("clicked {}", qa.0);
+                                            let mut opened = opened.get();
+                                            if opened.contains(&qa.0) {
+                                                opened.remove::<String>(&qa.0);
+                                            } else {
+                                                opened.insert(qa.0.clone());
+                                            }
+                                            set_opened(opened);
+                                        }
+                                    >
+                                        {q}
+                                    </button>
+                                    <Show when=move || opened.get().contains(&item.0)
+                                        fallback=move || view! {}
+                                    >
+                                        <p class="a">{a.clone()}</p>
+                                    </Show>
+                                </div>
+                            }
+                        }
+                    />
+                </div>
+            </div>
         </div>
     }
 }
