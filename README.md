@@ -1,12 +1,13 @@
 # 🚃 catenary
 
-Chat web app built with leptos in rust. Users are grouped by location and velocity. Therefore users in e.g. the same train, bus, subway, etc. can chat with each other.
+Chat web app built with [Leptos](https://leptos.dev/) in Rust.
+Users can see messages dispatched by other users who are near them and traveling in a similar direction at a comparable speed.
 
-Still a WIP.
+Use case: Chat with other passengers on a train, tram, bus, ferry, etc.
+
+Still a work in progress.
 
 ## Development
 
-### Server side rendering
-
-Install [cargo-leptos](https://crates.io/crates/cargo-leptos) with `cargo install --locked cargo-leptos`.  
-Then use `cargo leptos watch` to start the server.
+Install [cargo-leptos](https://crates.io/crates/cargo-leptos) with `cargo install --locked cargo-leptos`.
+Then use cargo leptos watch to start the server.
