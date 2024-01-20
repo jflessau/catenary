@@ -17,12 +17,9 @@ WORKDIR /app
 
 COPY --from=builder /work/target/release/catenary /app/
 COPY --from=builder /work/target/site /app/site
-COPY --from=builder /work/Cargo.toml /app/
 
-ENV LEPTOS_OUTPUT_NAME=catenary
 ENV LEPTOS_SITE_ROOT=./site
 ENV LEPTOS_SITE_PKG_DIR=pkg
 ENV LEPTOS_SITE_ADDR="0.0.0.0:3000"
-ENV LEPTOS_RELOAD_PORT=3001
 
 CMD ["/app/catenary"]

@@ -28,9 +28,14 @@ impl Default for Inbox {
 
 impl Inbox {
     pub fn push(&mut self, m: ChatMessageOut) {
-        if !self.messages.iter().any(|x| x.id == m.id) {
-            self.messages.push_front(m);
+        for msg in self.messages.iter_mut() {
+            if msg.id == m.id {
+                *msg = m;
+                return;
+            }
         }
+
+        self.messages.push_front(m);
         if self.messages.len() > 999 {
             self.messages.pop_back();
         }

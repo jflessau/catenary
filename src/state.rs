@@ -92,13 +92,18 @@ impl Plane {
     // TODO: get messages based on trace
     pub fn get_messages(&self, user_id: Option<Uuid>, trace: Trace) -> Vec<ChatMessageOut> {
         // get latest 100 messages
-        self.messages
+        let mut messages: Vec<ChatMessageOut> = self
+            .messages
             .iter()
             .take(10000)
             .filter(|&msg| trace.overlaps_with(&msg.trace))
             .cloned()
             .map(|msg| ChatMessageOut::from((msg, user_id)))
-            .collect()
+            .collect();
+
+        messages.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+
+        messages
     }
 
     pub fn vote_message(&mut self, id: Uuid, user_id: Uuid, up: bool) {
@@ -244,13 +249,6 @@ impl Trace {
 
         let distance_meters = Point::new(self.location.0, self.location.1)
             .geodesic_distance(&Point::new(other.location.0, other.location.1));
-        println!(
-            "speed: {}, time: {}, distance_meters: {}, coverable: {}",
-            self.speed,
-            TRACE_MATCH_MAX_MOVE_SECONDS,
-            distance_meters,
-            self.speed * TRACE_MATCH_MAX_MOVE_SECONDS
-        );
         // let speed_diff_meter_per_second = (self.speed - other.speed).abs();
         let slope_diff = (other.slope - self.slope).abs();
 

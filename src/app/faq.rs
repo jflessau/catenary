@@ -84,7 +84,6 @@ pub fn FAQ(title: &'static str, q_and_a: Vec<(String, String)>) -> impl IntoView
                                 <button type="button"
                                     class="q"
                                     on:click=move |_| {
-                                        log::info!("clicked {}", qa.0);
                                         let mut opened = opened.get();
                                         if opened.contains(&qa.0) {
                                             opened.remove::<String>(&qa.0);
