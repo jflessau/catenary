@@ -7,7 +7,6 @@ on:
 jobs:
   build_and_publish:
     name: 'Build and publish'
-    needs: web_check_formatting
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
