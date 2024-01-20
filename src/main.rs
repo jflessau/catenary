@@ -87,7 +87,7 @@ async fn main() {
 
     // setup logging
 
-    simple_logger::init_with_level(log::Level::Warn).expect("couldn't initialize logging");
+    simple_logger::init_with_level(log::Level::Info).expect("couldn't initialize logging");
 
     // configure leptos
 

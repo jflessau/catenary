@@ -1,6 +1,5 @@
 $bg: #fff8f0;
 $mg: #fff;
-$fg: #333;
 $border: #ddd;
 $shadow: #f5eee7;
 $accent: #f4d06f;
@@ -55,6 +54,8 @@ body,
 main,
 input,
 form,
+textarea,
+button,
 html {
   color: $font-color;
   padding: 0;
@@ -63,6 +64,7 @@ html {
   box-sizing: border-box;
   word-break: break-word;
   line-height: $font-size-l;
+  font-family: monospace;
 }
 
 .clickable {
@@ -93,12 +95,12 @@ html {
 
 .titlebar {
   width: 100%;
-  .bar {
+  .bar-container {
     width: 100%;
     display: flex;
     flex-direction: row;
     justify-content: center;
-    .row {
+    .bar {
       width: 100%;
       max-width: $max-content-width;
       display: flex;
@@ -119,9 +121,12 @@ html {
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      outline: none;
+      border: none;
+      background: none;
       div {
         width: 100%;
-        height: 0.25rem;
+        height: 0.3rem;
         background-color: $font-color;
       }
       &.open {
@@ -177,8 +182,9 @@ html {
         padding: 1rem;
         text-align: left;
         font-weight: bold;
-        &.close {
-          font-weight: bold;
+        &.legal {
+          font-weight: normal;
+          font-size: $font-size-s;
         }
         span {
           padding-left: 0.5rem;
@@ -213,11 +219,145 @@ html {
 
 .main-container {
   height: calc(100% - #{$titlebar-height});
+  width: 100%;
   background-color: $bg;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: center;
+  overflow-y: scroll;
   &.mg {
     background-color: $mg;
+  }
+
+  .main {
+    width: 100%;
+    max-width: $max-content-width;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 2rem 1rem;
+    &.fullscreen {
+      padding: 0;
+      max-width: 100%;
+    }
+    .card {
+      width: 100%;
+      background: $mg;
+      box-shadow: 0 4px 0 0 $shadow;
+      border: 3px solid $border;
+      border-radius: $border-radius;
+      padding: 3rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: start;
+      align-items: start;
+      gap: 2rem;
+      @media (max-width: 500px) {
+        padding: 2rem;
+      }
+      h1 {
+        font-size: $font-size-xl * 1.3;
+        font-weight: bold;
+        width: 100%;
+        text-align: left;
+      }
+      .subtitle {
+        font-size: $font-size-m;
+        width: 100%;
+        text-align: left;
+        font-weight: bold;
+        :nth-child(1) {
+          opacity: 1;
+        }
+        :nth-child(2) {
+          opacity: 0.9;
+        }
+        :nth-child(3) {
+          opacity: 0.8;
+        }
+        :nth-child(4) {
+          opacity: 0.7;
+        }
+        :nth-child(5) {
+          opacity: 0.6;
+        }
+        :nth-child(6) {
+          opacity: 0.5;
+        }
+        :nth-child(7) {
+          opacity: 0.5;
+        }
+        :nth-child(8) {
+          opacity: 0.4;
+        }
+        :nth-child(9) {
+          opacity: 0.3;
+        }
+        span {
+          word-break: break-word;
+        }
+      }
+      .text {
+        opacity: 0.8;
+        width: 100%;
+        text-align: left;
+        font-size: $font-size-s;
+        max-width: 36rem;
+      }
+      .buttons {
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+        .button {
+          text-decoration: none;
+          background-color: $accent;
+          border: 1px solid $accent-border;
+          padding: 0.35rem 0.75rem;
+          border-radius: $border-radius;
+          font-size: $font-size-m;
+          font-weight: bold;
+          &.dark {
+            background-color: $shadow;
+            color: $font-color;
+            border: 1px solid $border;
+            font-weight: normal;
+            font-size: $font-size-s;
+          }
+        }
+      }
+    }
+    .footer {
+      margin-top: 4rem;
+      padding-top: 2rem;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      // border-top: 1px solid $border;
+      p,
+      a {
+        font-size: $font-size-s;
+        color: $font-color;
+      }
+      div {
+        padding: 2rem 0rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        &.legal-links {
+          a {
+            text-decoration: none;
+          }
+          border-top: 1px solid $border;
+        }
+      }
+    }
   }
 
   .messages {
@@ -250,7 +390,6 @@ html {
           border-radius: $border-radius;
           padding: 0.5rem 0.5rem;
           text-align: left;
-          backdrop-filter: blur(11px);
           background: $mg;
           box-shadow: 0 2px 0 0 $shadow;
           border: 1px solid $border;
@@ -312,6 +451,7 @@ html {
     background-color: $mg;
     textarea {
       width: 100%;
+      height: 100%;
       resize: none;
       border: none;
       outline: none;
@@ -319,8 +459,6 @@ html {
       border-radius: $border-radius;
       font-size: $font-size-m;
       line-height: $font-size-m;
-      color: $fg;
-      height: calc(100% - (1rem + 4px));
       background-color: $mg;
       border: 2px solid $border;
     }
@@ -332,7 +470,6 @@ html {
       font-size: $font-size-m;
       line-height: 1.8rem;
       font-weight: bold;
-      color: $fg;
       background-color: $accent;
       border: 1px solid $accent-border;
       span {
@@ -346,122 +483,104 @@ html {
       font-weight: bold;
     }
   }
-  .row {
+  .faq {
+    width: 100%;
+    max-width: $max-content-width;
+    height: 100%;
     display: flex;
-    justify-content: center;
-    flex-direction: row;
-    overflow-y: scroll;
-    .faq {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 1rem;
+    h1 {
       width: 100%;
-      max-width: $max-content-width;
-      height: 100%;
+      font-size: $font-size-l;
+      line-height: 1.5rem;
+      font-weight: bold;
+      text-align: left;
+      padding-bottom: 1rem;
+    }
+    .faq-items {
       display: flex;
+      width: 100%;
       flex-direction: column;
       justify-content: flex-start;
       align-items: center;
       gap: 1rem;
-      padding: 2rem 1rem;
-      h1 {
+      .faq-item {
         width: 100%;
-        font-size: $font-size-l;
-        line-height: 1.5rem;
-        font-weight: bold;
-        text-align: left;
-        padding-bottom: 1rem;
-      }
-      .faq-items {
-        padding-bottom: 2rem;
         display: flex;
-        width: 100%;
         flex-direction: column;
         justify-content: flex-start;
-        align-items: center;
-        gap: 1rem;
-        .faq-item {
-          width: 100%;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
-          align-items: flex-start;
-          gap: 0.5rem;
-          background-color: $mg;
-          padding: 1rem;
-          border-radius: $border-radius;
-          border: 1px solid $border;
-          p {
-            text-align: left;
-          }
-          button {
-            cursor: pointer;
-            border: none;
-            outline: none;
-            background: none;
-            color: $font-color;
-            line-height: $font-size-xl;
-            font-size: $font-size-m;
-            font-weight: bold;
-            text-align: left;
-            padding: 0;
-          }
-          .q {
-            font-weight: bold;
-            font-size: $font-size-m;
-            text-decoration: underline;
-          }
-          .a {
-            font-size: $font-size-s;
-            white-space: pre-line;
-          }
+        align-items: flex-start;
+        gap: 0.5rem;
+        background-color: $mg;
+        padding: 1rem;
+        border-radius: $border-radius;
+        border: 1px solid $border;
+        p {
+          text-align: left;
+        }
+        button {
+          cursor: pointer;
+          border: none;
+          outline: none;
+          background: none;
+          color: $font-color;
+          line-height: $font-size-xl;
+          font-size: $font-size-m;
+          font-weight: bold;
+          text-align: left;
+          padding: 0;
+        }
+        .q {
+          font-weight: bold;
+          font-size: $font-size-m;
+          text-decoration: underline;
+        }
+        .a {
+          font-size: $font-size-s;
+          white-space: pre-line;
         }
       }
     }
   }
-  .text-content-row {
-    display: flex;
-    justify-content: center;
-    flex-direction: row;
-    overflow-y: scroll;
-    .text-content {
-      background: $mg;
-      height: 100%;
-      width: 100%;
-      max-width: $max-content-width;
-      display: block;
-      padding: 2rem 1rem;
-      :last-child {
-        padding-bottom: 2rem;
-      }
-      h1,
-      h2,
-      h3,
-      h4,
-      h5 {
-        font-weight: bold;
-      }
-      h1 {
-        font-size: $font-size-xl;
-      }
-      h2 {
-        font-size: $font-size-l;
-      }
-      h3 {
-        font-size: $font-size-m;
-      }
-      h1,
-      h2,
-      h3,
-      h4,
-      h5,
-      p,
-      div,
-      img,
-      ul,
-      il,
-      ol,
-      li {
-        text-align: left;
-        margin-bottom: 2rem;
-      }
+  .text-content {
+    background: $mg;
+    width: 100%;
+    h1,
+    h2,
+    h3,
+    h4,
+    h5 {
+      font-weight: bold;
+    }
+    h1 {
+      font-size: $font-size-xl;
+    }
+    h2 {
+      font-size: $font-size-l;
+    }
+    h3 {
+      font-size: $font-size-m;
+    }
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    p,
+    div,
+    img,
+    ul,
+    il,
+    ol,
+    li {
+      text-align: left;
+      margin-bottom: 2rem;
+    }
+    :last-child {
+      margin-bottom: 0;
     }
   }
 }

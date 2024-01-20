@@ -46,7 +46,7 @@ pub async fn send_message(text: String, trace: Trace) -> Result<(), ServerFnErro
 }
 
 #[server(ListMessages, "/api")]
-pub async fn list_messages() -> Result<Vec<ChatMessageOut>, ServerFnError> {
+pub async fn list_messages(trace: Trace) -> Result<Vec<ChatMessageOut>, ServerFnError> {
     let tx = use_context::<Arc<Mutex<Plane>>>().expect("couldn't get plane context");
     let user_id = use_context::<Uuid>();
 
@@ -55,7 +55,7 @@ pub async fn list_messages() -> Result<Vec<ChatMessageOut>, ServerFnError> {
         return Ok(vec![]);
     };
 
-    Ok(plane.get_messages(user_id))
+    Ok(plane.get_messages(user_id, trace))
 }
 
 #[server(VoteMessage, "/api")]

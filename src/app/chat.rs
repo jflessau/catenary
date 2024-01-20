@@ -1,4 +1,4 @@
-use super::Titlebar;
+use super::{Inbox, Titlebar};
 use crate::api::*;
 use crate::state::*;
 use geo::Point;
@@ -57,8 +57,10 @@ pub fn View() -> impl IntoView {
     view! {
         <Titlebar current_page="chat"/>
         <div class="main-container">
-            <NoTrace trace/>
-            <Chat trace/>
+            <div class="main fullscreen">
+                <NoTrace trace/>
+                <Chat trace/>
+            </div>
         </div>
     }
 }
@@ -147,15 +149,29 @@ fn NoTrace(trace: ReadSignal<Result<Trace, NoTrace>>) -> impl IntoView {
 
 #[component]
 fn Chat(trace: ReadSignal<Result<Trace, NoTrace>>) -> impl IntoView {
-    let (messages, set_messages) = create_signal(vec![]);
+    let inbox = use_context::<RwSignal<Inbox>>().expect("no inbox context");
+    log::info!("inbox: {:?}", inbox.get_untracked().messages.len());
     let (load_messages, set_load_messages) = create_signal(false);
 
     let loader = create_resource(load_messages, move |load_messages| async move {
         if load_messages {
             set_load_messages(false);
-            set_messages(list_messages().await.expect("couldn't list message"));
+            let Ok(trace) = trace.get_untracked() else {
+                println!("no trace for loading messages, this shouldn't happen");
+                return "".to_owned();
+            };
+            println!("loading messages");
+            list_messages(trace)
+                .await
+                .expect("couldn't list message")
+                .into_iter()
+                .for_each(|msg| {
+                    let mut inbox_updated = inbox.get_untracked();
+                    inbox_updated.push(msg.clone());
+                    inbox.set(inbox_updated);
+                });
         }
-        return "".to_owned();
+        "".to_owned()
     });
 
     create_effect(move |prev_handle: Option<IntervalHandle>| {
@@ -184,7 +200,7 @@ fn Chat(trace: ReadSignal<Result<Trace, NoTrace>>) -> impl IntoView {
             </div>
         }>
             {move || loader.get()}
-            <Messages messages set_load_messages trace/>
+            <Messages inbox set_load_messages trace/>
             <SendForm set_load_messages trace />
         </Transition>
     }
@@ -217,7 +233,7 @@ fn SendForm(
                     on:input=move |ev| {
                         set_msg(event_target_value(&ev));
                     }
-                    prop:value={msg.clone()}
+                    prop:value={msg}
                 />
                 <button class={move || send_button_props().1}
                     on:click=move |_| {
@@ -225,7 +241,7 @@ fn SendForm(
                             return;
                         }
                         spawn_local(async move {
-                            let Ok(trace) = (move || trace.get())() else {
+                            let Ok(trace) = trace.get_untracked() else {
                                 log::error!("no trace for sending message, this shouldn't happen");
                                 return;
                             };
@@ -249,7 +265,7 @@ fn SendForm(
 
 #[component]
 fn Messages(
-    messages: ReadSignal<Vec<ChatMessageOut>>,
+    inbox: RwSignal<Inbox>,
     set_load_messages: WriteSignal<bool>,
     trace: ReadSignal<Result<Trace, NoTrace>>,
 ) -> impl IntoView {
@@ -260,7 +276,7 @@ fn Messages(
         >
             <div class="messages">
                 <For
-                    each=messages
+                    each={move || inbox.get().messages}
                     key=|message| format!("{}-{:?}-{}-{}", message.id, message.vote, message.upvoters, message.downvoters)
                     children=move |msg| {
                         view! {
