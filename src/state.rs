@@ -4,6 +4,7 @@ use geo::{geometry::Point, GeodesicDistance};
 use names::Generator;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::env;
 use uuid::Uuid;
 use web_sys::PositionError;
 
@@ -23,10 +24,9 @@ cfg_if! {
     }
 }
 
-// TODO: Move these constants to environment variables, but only after
-// experiencing the pain of building, deploying, running, and realizing
-// one of these needs to be changed. Repeat that process a few times,
-// and _then_ move them to environment variables, as is tradition.
+lazy_static::lazy_static! {
+    pub static ref CONFIG: Config = Config::new();
+}
 
 // max. amount of messages hold in memory
 const MAX_MESSAGES_IN_MEMORY: usize = 100_000;
@@ -49,6 +49,75 @@ const TRACE_MATCH_MAX_MOVE_SECONDS: f64 = 180.0;
 // max. slope diff between two traces in degrees
 const TRACE_MATCH_MAX_SLOPE_DIFF_DEGREES: f64 = 32.0;
 
+pub struct Config {
+    // max. amount of messages hold in memory
+    max_messages_in_memory: usize,
+    // max. amount of characters in a message
+    max_message_length: usize,
+    // max. message age in minutes before removing from memory
+    max_message_age_minutes: i64,
+
+    // max. amount of locations stored in history
+    max_locations_in_history: usize,
+    // max. age of location in seconds before removing from history
+    max_location_age_seconds: usize,
+    // min. amount of seconds between first and last location in history, below that, the trace is not valid
+    min_location_time_delta_seconds: f64,
+    // min. speed in meters per second, below that, the trace is not valid
+    min_speed_meters_per_second: f64,
+
+    // match traces if distance covered of self in x seconds is smaller than distance diff between self and other
+    trace_match_max_move_seconds: f64,
+    // max. slope diff between two traces in degrees
+    trace_match_max_slope_diff_degrees: f64,
+}
+
+impl Config {
+    fn new() -> Self {
+        Self {
+            max_messages_in_memory: env::var("MAX_MESSAGES_IN_MEMORY")
+                .unwrap_or_else(|_| MAX_MESSAGES_IN_MEMORY.to_string())
+                .parse()
+                .unwrap_or(100_000),
+            max_message_length: env::var("MAX_MESSAGE_LENGTH")
+                .unwrap_or_else(|_| MAX_MESSAGE_LENGTH.to_string())
+                .parse()
+                .unwrap_or(144),
+            max_message_age_minutes: env::var("MAX_MESSAGE_AGE_MINUTES")
+                .unwrap_or_else(|_| MAX_MESSAGE_AGE_MINUTES.to_string())
+                .parse()
+                .unwrap_or(10),
+
+            max_locations_in_history: env::var("MAX_LOCATIONS_IN_HISTORY")
+                .unwrap_or_else(|_| MAX_LOCATIONS_IN_HISTORY.to_string())
+                .parse()
+                .unwrap_or(4),
+            max_location_age_seconds: env::var("MAX_LOCATION_AGE_SECONDS")
+                .unwrap_or_else(|_| MAX_LOCATION_AGE_SECONDS.to_string())
+                .parse()
+                .unwrap_or(60),
+            min_location_time_delta_seconds: env::var("MIN_LOCATION_TIME_DELTA_SECONDS")
+                .unwrap_or_else(|_| MIN_LOCATION_TIME_DELTA_SECONDS.to_string())
+                .parse()
+                .unwrap_or(1.5),
+            min_speed_meters_per_second: env::var("MIN_SPEED_METERS_PER_SECOND")
+                .unwrap_or_else(|_| MIN_SPEED_METERS_PER_SECOND.to_string())
+                .parse()
+                .unwrap_or(3.0),
+
+            trace_match_max_move_seconds: env::var("TRACE_MATCH_MAX_MOVE_SECONDS")
+                .unwrap_or_else(|_| TRACE_MATCH_MAX_MOVE_SECONDS.to_string())
+                .parse()
+                .unwrap_or(180.0),
+
+            trace_match_max_slope_diff_degrees: env::var("TRACE_MATCH_MAX_SLOPE_DIFF_DEGREES")
+                .unwrap_or_else(|_| TRACE_MATCH_MAX_SLOPE_DIFF_DEGREES.to_string())
+                .parse()
+                .unwrap_or(32.0),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Plane {
     messages: VecDeque<ChatMessage>,
@@ -58,7 +127,7 @@ pub struct Plane {
 impl Plane {
     pub fn new() -> Self {
         Plane {
-            messages: VecDeque::with_capacity(MAX_MESSAGES_IN_MEMORY),
+            messages: VecDeque::with_capacity(CONFIG.max_messages_in_memory),
             author_usernames_by_id: HashMap::new(),
         }
     }
@@ -81,8 +150,9 @@ impl Plane {
         let msg = ChatMessage::from((msg, username));
         self.messages.push_front(msg.clone());
 
-        self.messages
-            .retain(|msg| (Utc::now() - msg.timestamp).num_minutes() < MAX_MESSAGE_AGE_MINUTES);
+        self.messages.retain(|msg| {
+            (Utc::now() - msg.timestamp).num_minutes() < CONFIG.max_message_age_minutes
+        });
 
         if self.messages.len() >= self.messages.capacity() {
             self.messages.pop_back();
@@ -140,9 +210,9 @@ pub struct ChatMessageIn {
 
 impl ChatMessageIn {
     pub fn new(author: Uuid, mut text: String, trace: Trace) -> Self {
-        if text.len() > MAX_MESSAGE_LENGTH {
+        if text.len() > CONFIG.max_message_length {
             log::warn!("message too long: {}", text.len());
-            text.truncate(MAX_MESSAGE_LENGTH);
+            text.truncate(CONFIG.max_message_length);
         }
 
         let text = text.trim().to_string();
@@ -243,7 +313,9 @@ impl Trace {
     }
 
     fn overlaps_with(&self, other: &Self) -> bool {
-        if self.speed < MIN_SPEED_METERS_PER_SECOND || other.speed < MIN_SPEED_METERS_PER_SECOND {
+        if self.speed < CONFIG.min_speed_meters_per_second
+            || other.speed < CONFIG.min_speed_meters_per_second
+        {
             return false;
         }
 
@@ -253,11 +325,11 @@ impl Trace {
         let slope_diff = (other.slope - self.slope).abs();
 
         // match if distance diff is smaller than distance covered by self in 2 minutes
-        distance_meters < self.speed * TRACE_MATCH_MAX_MOVE_SECONDS
+        distance_meters < self.speed * CONFIG.trace_match_max_move_seconds
             // match if speed diff is smaller than 1 m/s
             // && speed_diff_meter_per_second < 20.0 // TODO: think about that for a while
             // match if slope diff is smaller than x degrees
-            && slope_diff < TRACE_MATCH_MAX_SLOPE_DIFF_DEGREES // TODO: maybe the allowed diff should be higher for lower speeds?
+            && slope_diff < CONFIG.trace_match_max_slope_diff_degrees // TODO: maybe the allowed diff should be higher for lower speeds?
     }
 }
 
@@ -269,33 +341,33 @@ mod tests {
 
         // low speed
 
-        let trace_a = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND - 1.0, 0.0);
-        let trace_b = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND + 1.0, 0.0);
+        let trace_a = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second - 1.0, 0.0);
+        let trace_b = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second + 1.0, 0.0);
         assert!(!trace_a.overlaps_with(&trace_b), "self has low speed");
-        let trace_a = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND + 1.0, 0.0);
-        let trace_b = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND - 1.0, 0.0);
+        let trace_a = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second + 1.0, 0.0);
+        let trace_b = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second - 1.0, 0.0);
         assert!(!trace_a.overlaps_with(&trace_b), "other has low speed");
-        let trace_a = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND - 1.0, 0.0);
-        let trace_b = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND - 1.0, 0.0);
+        let trace_a = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second - 1.0, 0.0);
+        let trace_b = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second - 1.0, 0.0);
         assert!(!trace_a.overlaps_with(&trace_b), "both have low speed");
 
         // slope diff
 
-        let trace_a = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND + 1.0, 0.0);
-        let trace_b = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND + 1.0, 0.0);
+        let trace_a = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second + 1.0, 0.0);
+        let trace_b = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second + 1.0, 0.0);
         assert!(trace_a.overlaps_with(&trace_b), "same slope");
-        let trace_a = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND + 1.0, 0.0);
+        let trace_a = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second + 1.0, 0.0);
         let trace_b = Trace::new(
             (0.0, 0.0),
-            MIN_SPEED_METERS_PER_SECOND + 1.0,
-            TRACE_MATCH_MAX_SLOPE_DIFF_DEGREES - 1.0,
+            CONFIG.min_speed_meters_per_second + 1.0,
+            CONFIG.trace_match_max_slope_diff_degrees - 1.0,
         );
         assert!(trace_a.overlaps_with(&trace_b), "small slope diff");
-        let trace_a = Trace::new((0.0, 0.0), MIN_SPEED_METERS_PER_SECOND + 1.0, 0.0);
+        let trace_a = Trace::new((0.0, 0.0), CONFIG.min_speed_meters_per_second + 1.0, 0.0);
         let trace_b = Trace::new(
             (0.0, 0.0),
-            MIN_SPEED_METERS_PER_SECOND + 1.0,
-            TRACE_MATCH_MAX_SLOPE_DIFF_DEGREES + 1.0,
+            CONFIG.min_speed_meters_per_second + 1.0,
+            CONFIG.trace_match_max_slope_diff_degrees + 1.0,
         );
         assert!(!trace_a.overlaps_with(&trace_b), "big slope diff");
 
@@ -349,6 +421,7 @@ pub enum NoTrace {
 
 impl From<PositionError> for NoTrace {
     fn from(err: PositionError) -> Self {
+        println!("err: {:?}", err);
         match err.code() {
             1 => NoTrace::NoPermission,
             2 => NoTrace::PositionUnavailable,
@@ -370,10 +443,10 @@ impl LocationHistory {
     pub fn new() -> Self {
         Self {
             locations: vec![],
-            size: MAX_LOCATIONS_IN_HISTORY,
-            max_location_age_seconds: MAX_LOCATION_AGE_SECONDS,
-            min_location_time_delta_seconds: MIN_LOCATION_TIME_DELTA_SECONDS,
-            min_speed_meters_pers_second: MIN_SPEED_METERS_PER_SECOND,
+            size: CONFIG.max_locations_in_history,
+            max_location_age_seconds: CONFIG.max_location_age_seconds,
+            min_location_time_delta_seconds: CONFIG.min_location_time_delta_seconds,
+            min_speed_meters_pers_second: CONFIG.min_speed_meters_per_second,
         }
     }
 

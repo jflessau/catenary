@@ -15,3 +15,5 @@ playwright/.cache/
 dist
 
 .DS_Store
+
+.env

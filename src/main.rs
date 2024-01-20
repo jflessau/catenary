@@ -32,6 +32,8 @@ async fn main() {
     use tokio::sync::mpsc::{channel, Receiver, Sender};
     use uuid::Uuid;
 
+    dotenv::dotenv().ok();
+
     #[axum::debug_handler]
     async fn server_fn_handler(
         State(app_state): State<AppState>,
@@ -87,7 +89,10 @@ async fn main() {
 
     // setup logging
 
-    simple_logger::init_with_level(log::Level::Info).expect("couldn't initialize logging");
+    simple_logger::SimpleLogger::new()
+        .env()
+        .init()
+        .expect("couldn't initialize logger");
 
     // configure leptos
 

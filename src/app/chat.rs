@@ -45,8 +45,11 @@ pub fn View() -> impl IntoView {
             }
             if let Some(coords) = coords.get() {
                 set_location(Some(Point::new(coords.longitude(), coords.latitude())));
-            } else {
-                log::info!("no coords, error: {:?}", error.get());
+                return;
+            }
+            if let Some(error) = error.get() {
+                log::warn!("no coords, error: {:?}", error);
+                set_trace(Err(NoTrace::from(error)));
             };
         };
 
@@ -215,7 +218,7 @@ fn SendForm(
     let (sending, set_sending) = create_signal(false);
 
     let send_button_props = move || match (sending.get(), msg.get().is_empty()) {
-        (true, _) => ("Sending...", "clickable disabled"),
+        (true, _) => ("Sending", "clickable disabled"),
         (_, true) => ("Send", "clickable disabled"),
         _ => ("Send", "clickable"),
     };
@@ -293,13 +296,20 @@ fn Messages(
 fn Message(msg: ChatMessageOut, set_load_messages: WriteSignal<bool>) -> impl IntoView {
     let timestamp = msg.timestamp.format("%H:%M").to_string();
 
-    let opacity = 10_usize.saturating_sub(msg.downvoters);
-    let bubble_style = if opacity >= 10 {
+    let bubble_style = if msg.downvoters == 0 {
         "opacity: 1.0;".to_owned()
-    } else if opacity <= 2 {
+    } else if msg.downvoters >= 8 {
         "opacity: 0.2;".to_owned()
     } else {
-        format!("opacity: 0.{};", opacity)
+        format!("opacity: 0.{};", 10 - msg.downvoters)
+    };
+
+    let text_classes = if msg.upvoters >= 8 {
+        "text scale-8".to_owned()
+    } else if msg.upvoters == 0 {
+        "text".to_owned()
+    } else {
+        format!("text scale-{}", msg.upvoters)
     };
 
     view! {
@@ -307,7 +317,7 @@ fn Message(msg: ChatMessageOut, set_load_messages: WriteSignal<bool>) -> impl In
             <p class="author">{msg.username}</p>
             <div class="content">
                 <div class="bubble" style={bubble_style}>
-                    <p class="text">{msg.text}</p>
+                    <p class=text_classes>{msg.text}</p>
                     <p class="time">{timestamp}</p>
                 </div>
                 <div class="votes">

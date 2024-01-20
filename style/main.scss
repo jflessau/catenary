@@ -397,6 +397,11 @@ html {
             word-wrap: break-word;
             font-size: $font-size-s;
             white-space: break-spaces;
+            @for $i from 1 through 8 {
+              &.scale-#{$i} {
+                font-size: $font-size-s + $i / 60;
+              }
+            }
           }
           .time {
             width: 100%;
