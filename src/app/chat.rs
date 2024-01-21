@@ -10,29 +10,45 @@ use std::time::Duration;
 
 #[component]
 pub fn View() -> impl IntoView {
+    let (load_config, set_load_config) = create_signal(true);
     let (location, set_location) = create_signal(None as Option<Point<f64>>);
-    let location_history = LocationHistory::new();
-    let (trace, set_trace) = create_signal(location_history.clone().trace());
-    let (location_history, set_location_history) = create_signal(location_history);
+    let (location_history, set_location_history) = create_signal(None as Option<LocationHistory>);
+    let (trace, set_trace) = create_signal(Result::<Trace, NoTrace>::Err(NoTrace::LoadingConfig));
+
+    // get config
+
+    let loader = create_local_resource(load_config, move |load_config| async move {
+        if location_history.get_untracked().is_none() && load_config {
+            log::info!("loading config");
+            set_load_config(false);
+            let config = get_config().await.expect("couldn't get configuration");
+            set_location_history(Some(LocationHistory::new(config)));
+        }
+        "".to_owned()
+    });
+
+    // add new geolocation and set trace
 
     create_effect(move |_| {
         let Some(location) = location.get() else {
             return;
         };
-        let mut location_history = location_history.get_untracked();
+        let Some(mut location_history) = location_history.get_untracked() else {
+            log::info!("no location history yet");
+            return;
+        };
         location_history.add_location(location);
         let new_trace = location_history.trace();
-        set_location_history(location_history);
+        set_location_history(Some(location_history));
         set_trace(new_trace);
     });
 
+    // get geolocations
+
     create_effect(move |prev_handle: Option<IntervalHandle>| {
         if let Some(prev_handle) = prev_handle {
-            log::info!("clearing geolocation effect");
             prev_handle.clear();
         };
-
-        log::info!("run geolocation effect");
 
         let UseGeolocationReturn { coords, error, .. } = use_geolocation_with_options(
             UseGeolocationOptions::default().enable_high_accuracy(true),
@@ -63,6 +79,7 @@ pub fn View() -> impl IntoView {
             <div class="main fullscreen">
                 <NoTrace trace/>
                 <Chat trace/>
+                {move || loader.get()}
             </div>
         </div>
     }
@@ -109,12 +126,12 @@ fn NoTrace(trace: ReadSignal<Result<Trace, NoTrace>>) -> impl IntoView {
                     </div>
                 }.into_view()
             }
-            Err(NoTrace::WaitingForTimeToPass) => view! {
+            Err(NoTrace::WaitingForTimeToPass) | Err(NoTrace::LoadingConfig) => view! {
                 <div class="inner">
                     <div class="loading-container">
                         <span class="loader"></span>
                     </div>
-                    <p>"Calculating your speed. Please wait."</p>
+                    <p>"Loading..."</p>
                 </div>
             }.into_view(),
             Err(NoTrace::TooSlow {
@@ -153,17 +170,15 @@ fn NoTrace(trace: ReadSignal<Result<Trace, NoTrace>>) -> impl IntoView {
 #[component]
 fn Chat(trace: ReadSignal<Result<Trace, NoTrace>>) -> impl IntoView {
     let inbox = use_context::<RwSignal<Inbox>>().expect("no inbox context");
-    log::info!("inbox: {:?}", inbox.get_untracked().messages.len());
     let (load_messages, set_load_messages) = create_signal(false);
 
     let loader = create_resource(load_messages, move |load_messages| async move {
         if load_messages {
             set_load_messages(false);
             let Ok(trace) = trace.get_untracked() else {
-                println!("no trace for loading messages, this shouldn't happen");
                 return "".to_owned();
             };
-            println!("loading messages");
+            log::info!("loading messages");
             list_messages(trace)
                 .await
                 .expect("couldn't list message")

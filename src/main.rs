@@ -25,6 +25,7 @@ async fn main() {
     use catenary::fileserv::file_and_error_handler;
     use catenary::state::{AppState, Plane};
     use catenary::state::{ChatMessage, ChatMessageIn};
+    use env_logger::Builder;
     use leptos::{get_configuration, provide_context, view};
     use leptos_axum::LeptosRoutes;
     use leptos_axum::{generate_route_list, handle_server_fns_with_context};
@@ -32,7 +33,15 @@ async fn main() {
     use tokio::sync::mpsc::{channel, Receiver, Sender};
     use uuid::Uuid;
 
+    // setup logging
+
     dotenv::dotenv().ok();
+    Builder::new()
+        .parse_filters(
+            &std::env::var("RUST_LOG")
+                .unwrap_or("info,tracing=warn,leptos_dom=warn,leptos_axum=warn".to_string()),
+        )
+        .init();
 
     #[axum::debug_handler]
     async fn server_fn_handler(
@@ -87,16 +96,11 @@ async fn main() {
         handler(req).await.into_response()
     }
 
-    // setup logging
-
-    simple_logger::SimpleLogger::new()
-        .env()
-        .init()
-        .expect("couldn't initialize logger");
-
     // configure leptos
 
-    let conf = get_configuration(None).await.unwrap();
+    let conf = get_configuration(None)
+        .await
+        .expect("couldn't get configuration");
     let leptos_options = conf.leptos_options;
     let addr = leptos_options.site_addr;
     let routes = generate_route_list(|| view! {<App/> });

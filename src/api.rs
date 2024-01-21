@@ -1,4 +1,4 @@
-use crate::state::{ChatMessageOut, Trace};
+use crate::state::{ChatMessageOut, Config, Trace};
 use leptos::*;
 use uuid::Uuid;
 
@@ -75,4 +75,9 @@ pub async fn vote_message(id: Uuid, up: bool) -> Result<(), ServerFnError> {
     plane.vote_message(id, user_id, up);
 
     Ok(())
+}
+
+#[server(GetConfig, "/api")]
+pub async fn get_config() -> Result<Config, ServerFnError> {
+    Ok(CONFIG.clone())
 }

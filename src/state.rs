@@ -49,6 +49,7 @@ const TRACE_MATCH_MAX_MOVE_SECONDS: f64 = 180.0;
 // max. slope diff between two traces in degrees
 const TRACE_MATCH_MAX_SLOPE_DIFF_DEGREES: f64 = 32.0;
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     // max. amount of messages hold in memory
     max_messages_in_memory: usize,
@@ -74,7 +75,7 @@ pub struct Config {
 
 impl Config {
     fn new() -> Self {
-        Self {
+        let config = Self {
             max_messages_in_memory: env::var("MAX_MESSAGES_IN_MEMORY")
                 .unwrap_or_else(|_| MAX_MESSAGES_IN_MEMORY.to_string())
                 .parse()
@@ -89,7 +90,10 @@ impl Config {
                 .unwrap_or(10),
 
             max_locations_in_history: env::var("MAX_LOCATIONS_IN_HISTORY")
-                .unwrap_or_else(|_| MAX_LOCATIONS_IN_HISTORY.to_string())
+                .unwrap_or_else(|_| {
+                    log::info!("failed to get MAX_LOCATIONS_IN_HISTORY");
+                    MAX_LOCATIONS_IN_HISTORY.to_string()
+                })
                 .parse()
                 .unwrap_or(4),
             max_location_age_seconds: env::var("MAX_LOCATION_AGE_SECONDS")
@@ -114,7 +118,15 @@ impl Config {
                 .unwrap_or_else(|_| TRACE_MATCH_MAX_SLOPE_DIFF_DEGREES.to_string())
                 .parse()
                 .unwrap_or(32.0),
+        };
+
+        cfg_if! {
+            if #[cfg(feature = "ssr")] {
+                log::info!("config: {:#?}", config);
+            }
         }
+
+        config
     }
 }
 
@@ -405,6 +417,7 @@ mod tests {
 
 #[derive(Clone, Debug)]
 pub enum NoTrace {
+    LoadingConfig,
     NoPermission,
     PositionUnavailable,
     Timeout,
@@ -430,7 +443,7 @@ impl From<PositionError> for NoTrace {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocationHistory {
     locations: Vec<(Point<f64>, DateTime<Utc>)>,
     size: usize,
@@ -440,13 +453,14 @@ pub struct LocationHistory {
 }
 
 impl LocationHistory {
-    pub fn new() -> Self {
+    pub fn new(config: Config) -> Self {
+        log::info!("new loc history with config: {:#?}", config);
         Self {
             locations: vec![],
-            size: CONFIG.max_locations_in_history,
-            max_location_age_seconds: CONFIG.max_location_age_seconds,
-            min_location_time_delta_seconds: CONFIG.min_location_time_delta_seconds,
-            min_speed_meters_pers_second: CONFIG.min_speed_meters_per_second,
+            size: config.max_locations_in_history,
+            max_location_age_seconds: config.max_location_age_seconds,
+            min_location_time_delta_seconds: config.min_location_time_delta_seconds,
+            min_speed_meters_pers_second: config.min_speed_meters_per_second,
         }
     }
 
