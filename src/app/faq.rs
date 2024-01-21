@@ -56,8 +56,10 @@ pub fn View() -> impl IntoView {
         <Titlebar current_page="faq"/>
         <div class="main-container">
             <div class="main">
-                <FAQ title="FAQ" q_and_a/>
-                <Footer/>
+                <div class="faq">
+                    <FAQ title="FAQ" q_and_a/>
+                    <Footer/>
+                </div>
             </div>
         </div>
     }
@@ -69,42 +71,40 @@ pub fn FAQ(title: &'static str, q_and_a: Vec<(String, String)>) -> impl IntoView
     let (opened, set_opened) = create_signal(HashSet::<String>::new());
 
     view! {
-        <div class="faq">
-            <h1>{title}</h1>
-            <div class="faq-items">
-                <For
-                    each=q_and_a
-                    key=|item| item.0.clone()
-                    children=move |item| {
-                        let qa = item.clone();
-                        let q = item.clone().0;
-                        let a = item.clone().1;
-                        view! {
-                            <div class="faq-item">
-                                <button type="button"
-                                    class="q"
-                                    on:click=move |_| {
-                                        let mut opened = opened.get();
-                                        if opened.contains(&qa.0) {
-                                            opened.remove::<String>(&qa.0);
-                                        } else {
-                                            opened.insert(qa.0.clone());
-                                        }
-                                        set_opened(opened);
+        <h1>{title}</h1>
+        <div class="faq-items">
+            <For
+                each=q_and_a
+                key=|item| item.0.clone()
+                children=move |item| {
+                    let qa = item.clone();
+                    let q = item.clone().0;
+                    let a = item.clone().1;
+                    view! {
+                        <div class="faq-item">
+                            <button type="button"
+                                class="q"
+                                on:click=move |_| {
+                                    let mut opened = opened.get();
+                                    if opened.contains(&qa.0) {
+                                        opened.remove::<String>(&qa.0);
+                                    } else {
+                                        opened.insert(qa.0.clone());
                                     }
-                                >
-                                    {q}
-                                </button>
-                                <Show when=move || opened.get().contains(&item.0)
-                                    fallback=move || view! {}
-                                >
-                                    <p class="a">{a.clone()}</p>
-                                </Show>
-                            </div>
-                        }
+                                    set_opened(opened);
+                                }
+                            >
+                                {q}
+                            </button>
+                            <Show when=move || opened.get().contains(&item.0)
+                                fallback=move || view! {}
+                            >
+                                <p class="a">{a.clone()}</p>
+                            </Show>
+                        </div>
                     }
-                />
-            </div>
+                }
+            />
         </div>
     }
 }
