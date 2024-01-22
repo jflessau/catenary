@@ -329,6 +329,101 @@ html {
         }
       }
     }
+    .faq {
+      width: 100%;
+      max-width: $max-content-width;
+      h1 {
+        width: 100%;
+        font-size: $font-size-l;
+        line-height: 1.5rem;
+        font-weight: bold;
+        text-align: left;
+        padding-bottom: 1rem;
+      }
+      .faq-items {
+        display: flex;
+        width: 100%;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        margin-top: 1rem;
+        gap: 1rem;
+        .faq-item {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+          align-items: flex-start;
+          gap: 0.5rem;
+          background-color: $mg;
+          padding: 1rem;
+          border-radius: $border-radius;
+          border: 1px solid $border;
+          p {
+            text-align: left;
+          }
+          button {
+            cursor: pointer;
+            border: none;
+            outline: none;
+            background: none;
+            color: $font-color;
+            line-height: $font-size-xl;
+            font-size: $font-size-m;
+            font-weight: bold;
+            text-align: left;
+            padding: 0;
+          }
+          .q {
+            font-weight: bold;
+            font-size: $font-size-m;
+            text-decoration: underline;
+          }
+          .a {
+            font-size: $font-size-s;
+            white-space: pre-line;
+          }
+        }
+      }
+    }
+    .text-content {
+      background: $mg;
+      width: 100%;
+      h1,
+      h2,
+      h3,
+      h4,
+      h5 {
+        font-weight: bold;
+      }
+      h1 {
+        font-size: $font-size-xl;
+      }
+      h2 {
+        font-size: $font-size-l;
+      }
+      h3 {
+        font-size: $font-size-m;
+      }
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      p,
+      div,
+      img,
+      ul,
+      il,
+      ol,
+      li {
+        text-align: left;
+        margin-bottom: 2rem;
+      }
+      :last-child {
+        margin-bottom: 0;
+      }
+    }
     .footer {
       margin-top: 4rem;
       padding-top: 2rem;
@@ -486,106 +581,6 @@ html {
       padding: 0.5rem;
       text-decoration: underline;
       font-weight: bold;
-    }
-  }
-  .faq {
-    width: 100%;
-    max-width: $max-content-width;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 1rem;
-    h1 {
-      width: 100%;
-      font-size: $font-size-l;
-      line-height: 1.5rem;
-      font-weight: bold;
-      text-align: left;
-      padding-bottom: 1rem;
-    }
-    .faq-items {
-      display: flex;
-      width: 100%;
-      flex-direction: column;
-      justify-content: flex-start;
-      align-items: center;
-      gap: 1rem;
-      .faq-item {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        align-items: flex-start;
-        gap: 0.5rem;
-        background-color: $mg;
-        padding: 1rem;
-        border-radius: $border-radius;
-        border: 1px solid $border;
-        p {
-          text-align: left;
-        }
-        button {
-          cursor: pointer;
-          border: none;
-          outline: none;
-          background: none;
-          color: $font-color;
-          line-height: $font-size-xl;
-          font-size: $font-size-m;
-          font-weight: bold;
-          text-align: left;
-          padding: 0;
-        }
-        .q {
-          font-weight: bold;
-          font-size: $font-size-m;
-          text-decoration: underline;
-        }
-        .a {
-          font-size: $font-size-s;
-          white-space: pre-line;
-        }
-      }
-    }
-  }
-  .text-content {
-    background: $mg;
-    width: 100%;
-    h1,
-    h2,
-    h3,
-    h4,
-    h5 {
-      font-weight: bold;
-    }
-    h1 {
-      font-size: $font-size-xl;
-    }
-    h2 {
-      font-size: $font-size-l;
-    }
-    h3 {
-      font-size: $font-size-m;
-    }
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    p,
-    div,
-    img,
-    ul,
-    il,
-    ol,
-    li {
-      text-align: left;
-      margin-bottom: 2rem;
-    }
-    :last-child {
-      margin-bottom: 0;
     }
   }
 }

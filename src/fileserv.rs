@@ -15,7 +15,12 @@ cfg_if! { if #[cfg(feature = "ssr")] {
 
     pub async fn file_and_error_handler(uri: Uri, State(options): State<LeptosOptions>, req: Request<Body>) -> AxumResponse {
         let root = options.site_root.clone();
-        let res = get_static_file(uri.clone(), &root).await.unwrap();
+        let res = get_static_file(uri.clone(), &root).await;
+        if let Err(err) = &res {
+            log::error!("Error getting static file {}, err {:?}", uri, err);
+        };
+
+        let res = res.expect("fails to unwrap response in file_and_error_handler");
 
         if res.status() == StatusCode::OK {
             res.into_response()
@@ -26,7 +31,12 @@ cfg_if! { if #[cfg(feature = "ssr")] {
     }
 
     async fn get_static_file(uri: Uri, root: &str) -> Result<Response<BoxBody>, (StatusCode, String)> {
-        let req = Request::builder().uri(uri.clone()).body(Body::empty()).unwrap();
+        let req = Request::builder().uri(uri.clone()).body(Body::empty());
+        if let Err(err) = &req {
+            log::error!("Error building request for static file {}, err {:?}", uri, err);
+        };
+        let req = req.expect("fails to unwrap request in get_static_file");
+
         match ServeDir::new(root).oneshot(req).await {
             Ok(res) => Ok(res.map(boxed)),
             Err(err) => Err((
