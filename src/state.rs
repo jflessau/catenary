@@ -162,18 +162,16 @@ impl Plane {
         let msg = ChatMessage::from((msg, username));
         self.messages.push_front(msg.clone());
 
-        self.messages.retain(|msg| {
-            (Utc::now() - msg.timestamp).num_minutes() < CONFIG.max_message_age_minutes
-        });
+        self.delete_old_messages();
 
         if self.messages.len() >= self.messages.capacity() {
             self.messages.pop_back();
         }
     }
 
-    // TODO: get messages based on trace
-    pub fn get_messages(&self, user_id: Option<Uuid>, trace: Trace) -> Vec<ChatMessageOut> {
-        // get latest 100 messages
+    pub fn get_messages(&mut self, user_id: Option<Uuid>, trace: Trace) -> Vec<ChatMessageOut> {
+        self.delete_old_messages();
+
         let mut messages: Vec<ChatMessageOut> = self
             .messages
             .iter()
@@ -207,6 +205,12 @@ impl Plane {
             msg.downvoters.insert(user_id);
             msg.upvoters.remove(&user_id);
         }
+    }
+
+    fn delete_old_messages(&mut self) {
+        self.messages.retain(|msg| {
+            (Utc::now() - msg.timestamp).num_minutes() < CONFIG.max_message_age_minutes
+        });
     }
 }
 

@@ -50,7 +50,7 @@ pub async fn list_messages(trace: Trace) -> Result<Vec<ChatMessageOut>, ServerFn
     let tx = use_context::<Arc<Mutex<Plane>>>().expect("couldn't get plane context");
     let user_id = use_context::<Uuid>();
 
-    let Ok(plane) = tx.lock() else {
+    let Ok(mut plane) = tx.lock() else {
         log::warn!("couldn't lock plane mutex in list handler");
         return Ok(vec![]);
     };
